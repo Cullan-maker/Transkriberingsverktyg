@@ -15,7 +15,6 @@ document.addEventListener('DOMContentLoaded', () => {
   setupTabs();
   loadHistory();
   
-  // Dölj frigör-knappen i mobilen (den behövs bara på datorn)
   if (window.innerWidth <= 600 || window.location.search.includes('mode=popout')) {
     const btn = document.getElementById('popoutBtn');
     if(btn) btn.style.display = 'none';
@@ -46,6 +45,13 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('fileStatus').style.display = 'block';
     }
   });
+
+  // Koppla exportfunktionerna så de fungerar för alla laddade analyser
+  document.getElementById('exportCopy').addEventListener('click', exportToClipboard);
+  document.getElementById('exportEmail').addEventListener('click', exportToEmail);
+  document.getElementById('exportTxt').addEventListener('click', () => exportToFile('txt'));
+  document.getElementById('exportWord').addEventListener('click', () => exportToFile('word'));
+  document.getElementById('exportPdf').addEventListener('click', exportToPdf);
 });
 
 function setupTabs() {
@@ -60,6 +66,8 @@ function setupTabs() {
       document.getElementById('errorBox').style.display = 'none';
       document.getElementById('status').innerText = '';
       document.getElementById('progressWrapper').style.display = 'none';
+      document.getElementById('result').style.display = 'none';
+      document.getElementById('exportContainer').style.display = 'none';
     });
   });
 }
@@ -161,11 +169,18 @@ function loadHistory() {
     const infoSpan = document.createElement('span');
     infoSpan.innerHTML = `<span class="history-date">${item.date}</span> (Sparad analys)`;
     infoSpan.style.flexGrow = '1';
+    
     infoSpan.addEventListener('click', () => {
       document.getElementById('result').innerHTML = item.content;
+      
+      const oldExportBlock = document.getElementById('result').querySelector('.export-section');
+      if (oldExportBlock) oldExportBlock.remove();
+      
       document.getElementById('result').style.display = 'block';
+      document.getElementById('exportContainer').style.display = 'block'; 
       setupResultInteractivity();
     });
+    
     const delBtn = document.createElement('button');
     delBtn.className = 'history-delete';
     delBtn.innerText = '❌';
@@ -175,6 +190,8 @@ function loadHistory() {
       hist = hist.filter(i => i.id !== item.id);
       localStorage.setItem('transcriptsHistory', JSON.stringify(hist));
       loadHistory();
+      document.getElementById('result').style.display = 'none';
+      document.getElementById('exportContainer').style.display = 'none';
     });
     div.appendChild(infoSpan);
     div.appendChild(delBtn);
@@ -212,6 +229,7 @@ async function handleAnalysis() {
 
   statusEl.innerText = "⏳ Förbereder...";
   resultEl.style.display = "none";
+  document.getElementById('exportContainer').style.display = "none";
   
   progressWrapper.style.display = "block";
   let currentProgress = 0;
@@ -230,7 +248,6 @@ async function handleAnalysis() {
 
   try {
     let response;
-    // Använder 1.5-pro för bästa stöd vid stora filmfiler och tunga utredningar
     const apiUrlText = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${GEMINI_API_KEY}`;
 
     if (activeTab === 'text') {
@@ -253,9 +270,8 @@ async function handleAnalysis() {
         return showError("Välj eller spela in en ljud/videofil först!");
       }
 
-      statusEl.innerText = `⏳ Laddar upp ${fileBlob.name ? 'filen' : 'inspelningen'} (upp till 2 GB)...`;
+      statusEl.innerText = `⏳ Laddar upp filen (Tung process)...`;
 
-      // 1. Starta uppladdning via Gemini File API
       const initRes = await fetch(`https://generativelanguage.googleapis.com/upload/v1beta/files?key=${GEMINI_API_KEY}`, {
         method: 'POST',
         headers: {
@@ -271,7 +287,6 @@ async function handleAnalysis() {
       if (!initRes.ok) throw new Error("Kunde inte starta uppladdningen. Kontrollera din API-nyckel.");
       const uploadUrl = initRes.headers.get('x-goog-upload-url');
 
-      // 2. Ladda upp själva filen
       const uploadRes = await fetch(uploadUrl, {
         method: 'POST',
         headers: {
@@ -286,10 +301,9 @@ async function handleAnalysis() {
       const fileInfo = await uploadRes.json();
       let geminiFile = fileInfo.file;
 
-      // 3. Vänta på Googles bearbetning (kritiskt för videofiler)
       let fileState = geminiFile.state;
       while (fileState === 'PROCESSING') {
-        statusEl.innerText = "⏳ Google bearbetar videon/ljudet... vänligen vänta.";
+        statusEl.innerText = "⏳ Google bearbetar videon/ljudet... det kan ta någon minut.";
         await new Promise(r => setTimeout(r, 4000));
         const checkRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/files/${geminiFile.name}?key=${GEMINI_API_KEY}`);
         const checkData = await checkRes.json();
@@ -297,8 +311,7 @@ async function handleAnalysis() {
         if (fileState === 'FAILED') throw new Error("Filen kunde inte läsas av AI:n.");
       }
 
-      // 4. Skicka filen till modellen för transkribering
-      statusEl.innerText = "⏳ Analyserar innehållet...";
+      statusEl.innerText = "⏳ Transkriberar och sammanfattar...";
       response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${GEMINI_API_KEY}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -392,23 +405,12 @@ function renderResult(data) {
       </div>`;
   });
   html += `</div>`;
-  
-  // EXPORT KNAPPAR (Lika för både widget och mobil)
-  html += `
-    <div class="export-section" id="exportContainer">
-      <div class="export-title">⬇️ Spara eller exportera</div>
-      <div class="export-grid">
-        <button class="btn-export" id="exportCopy">📋 Kopiera</button>
-        <button class="btn-export" id="exportEmail">✉️ Mejla</button>
-        <button class="btn-export" id="exportTxt">📄 Text (.txt)</button>
-        <button class="btn-export" id="exportWord">📝 Word (.doc)</button>
-      </div>
-      <button class="btn-export" id="exportPdf" style="width: 100%;">📕 Spara som PDF</button>
-    </div>
-  `;
 
   resultEl.innerHTML = html;
+  
   resultEl.style.display = "block";
+  document.getElementById('exportContainer').style.display = "block";
+  
   statusEl.innerText = "✅ Analys klar!";
   
   setupResultInteractivity();
@@ -438,21 +440,6 @@ function setupResultInteractivity() {
       });
     });
   });
-
-  const bindClick = (id, func) => {
-    const btn = document.getElementById(id);
-    if (btn) {
-      const newBtn = btn.cloneNode(true);
-      btn.parentNode.replaceChild(newBtn, btn);
-      newBtn.addEventListener('click', func);
-    }
-  };
-
-  bindClick('exportCopy', exportToClipboard);
-  bindClick('exportEmail', exportToEmail);
-  bindClick('exportTxt', () => exportToFile('txt'));
-  bindClick('exportWord', () => exportToFile('word'));
-  bindClick('exportPdf', exportToPdf);
 }
 
 // --- EXPORT FUNKTIONER ---
@@ -491,7 +478,6 @@ function exportToEmail() {
   const subject = encodeURIComponent("Transkription och sammanfattning");
   const body = encodeURIComponent(text);
   
-  // Hanterar webbläsartillägg vs mobil smidigt
   if (typeof chrome !== 'undefined' && chrome.tabs) {
     window.open(`mailto:?subject=${subject}&body=${body}`, '_blank');
   } else {
@@ -532,14 +518,12 @@ function exportToFile(type) {
 }
 
 function exportToPdf() {
-  // Kontrollerar om vi är i Chrome-tillägget (datorn) eller på webbsidan (mobilen)
   if (typeof chrome !== 'undefined' && chrome.extension) {
     if (!window.location.search.includes('mode=popout')) {
       alert("💡 Tips för PDF: Klicka på 'Frigör' uppe i högra hörnet, och spara som PDF i det fönstret istället!");
     }
     window.print();
   } else {
-    // Mobil / Webbsida PDF
     const exportContainer = document.getElementById('exportContainer');
     if(exportContainer) exportContainer.style.display = 'none';
     
@@ -554,7 +538,7 @@ function exportToPdf() {
 
     if (typeof html2pdf === 'undefined') {
       alert("PDF-motorn laddades inte in. Anslut till internet och försök igen.");
-      if(exportContainer) exportContainer.style.display = 'flex';
+      if(exportContainer) exportContainer.style.display = 'block';
       return;
     }
 

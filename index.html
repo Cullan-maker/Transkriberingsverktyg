@@ -104,11 +104,7 @@
     <div id="settings" class="card">
       <label style="font-weight: 800; font-size: 1rem; display: block; margin-bottom: 5px;">🤖 AI-Modell</label>
       <select id="modelSelect" style="margin-bottom: 20px;">
-        <!-- Använder -latest för att säkerställa att vi inte kallar på utfasade alias -->
-        <option value="auto">Auto (Skannar din nyckel efter godkända modeller)</option>
-        <option value="gemini-1.5-pro-latest">Gemini 1.5 Pro (Mest Avancerad)</option>
-        <option value="gemini-1.5-flash-latest">Gemini 1.5 Flash (Snabb & Stabil)</option>
-        <option value="gemini-2.0-flash-exp">Gemini 2.0 Flash (Experimentell)</option>
+        <option value="gemini-3.6-flash">Gemini 3.6 Flash (Tvingad via API-nyckel)</option>
       </select>
 
       <p style="margin: 0 0 5px 0; font-weight: 800; font-size: 1rem;">🔑 Google API-nyckel</p>
@@ -135,7 +131,7 @@
     </div>
   </div>
   
-  <script src="popup.js?v=600"></script>
+  <script src="popup.js?v=700"></script>
   <script>
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('sw.js').then(() => console.log("PWA Redo"));

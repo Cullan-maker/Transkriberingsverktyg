@@ -1,7 +1,7 @@
 {
   "name": "Transkriberare Pro",
   "short_name": "Transkriberare",
-  "description": "Mobilanpassad transkriberare med AI-skanning.",
+  "description": "Mobilanpassad transkriberare (Endast 3.6 Flash).",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#f1f5f9",

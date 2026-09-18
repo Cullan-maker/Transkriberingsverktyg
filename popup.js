@@ -13,7 +13,6 @@ const colors = ['#ffffff', '#dbeafe', '#dcfce7', '#fef9c3', '#f3e8ff', '#ffe4e6'
 
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('apiKeyInput').value = localStorage.getItem('geminiApiKey') || '';
-  document.getElementById('modelSelect').value = localStorage.getItem('geminiModel') || 'auto';
   
   setupTabs();
   loadHistory();
@@ -28,10 +27,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('result').addEventListener('input', () => {
     localStorage.setItem('currentDraftHTML', document.getElementById('result').innerHTML);
-  });
-  
-  document.getElementById('modelSelect').addEventListener('change', (e) => {
-    localStorage.setItem('geminiModel', e.target.value);
   });
 
   document.getElementById('analyzeBtn').addEventListener('click', handleAnalysis);
@@ -279,7 +274,7 @@ async function handleAnalysis() {
   "transcript" (en array med objekt: {"speaker": "Talare 1", "text": "vad som sades..."}). 
   Viktigt: Din output måste vara giltig JSON. Använd inte markdown runtom, bara rå JSON.\n\n`;
 
-  statusEl.innerText = "⏳ Kontrollerar API-nyckelns behörigheter...";
+  statusEl.innerText = "⏳ Initierar anrop till AI...";
   progressWrapper.style.display = "block";
   
   let currentProgress = 0;
@@ -296,89 +291,47 @@ async function handleAnalysis() {
   }, 500);
 
   try {
-    
-    // NYHET: HÄMTAR AUTOMATISKT TILLÅTNA MODELLER FÖR DIN NYCKEL
-    let fetchedModels = [];
-    try {
-      const modelsRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${GEMINI_API_KEY}`);
-      if (modelsRes.ok) {
-        const modelsData = await modelsRes.json();
-        fetchedModels = modelsData.models
-          .filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes("generateContent"))
-          .map(m => m.name.replace('models/', ''));
-      }
-    } catch(err) {
-      console.warn("Kunde inte hämta modell-lista från Google.", err);
-    }
-
-    const selectedModel = document.getElementById('modelSelect').value;
-    let modelsToTry = [];
-    
-    if (selectedModel === 'auto') {
-      if (fetchedModels.length > 0) {
-        // Om vi har listan: Prioritera den bästa möjliga modellen som din nyckel tillåter
-        const prioList = ['gemini-2.5-flash', 'gemini-2.0-flash-exp', 'gemini-2.0-flash', 'gemini-1.5-pro-latest', 'gemini-1.5-pro', 'gemini-1.5-flash-latest', 'gemini-1.5-flash', 'gemini-pro'];
-        modelsToTry = prioList.filter(m => fetchedModels.includes(m));
-        if(modelsToTry.length === 0) modelsToTry = [fetchedModels[0]]; 
-      } else {
-        // Reservplan om listan inte gick att hämta
-        modelsToTry = ['gemini-1.5-pro-latest', 'gemini-1.5-flash-latest', 'gemini-1.5-pro', 'gemini-1.5-flash'];
-      }
-    } else {
-      // Om användaren valt en specifik modell, testa den + en felsäker reserv
-      modelsToTry = [selectedModel, 'gemini-1.5-flash-latest', 'gemini-1.5-flash']; 
-    }
-
     let uploadedFileRef = null;
     if (fileBlob) {
       statusEl.innerText = "⏳ Laddar upp filen säkert till Google...";
       uploadedFileRef = await uploadToGeminiFileAPI(fileBlob, GEMINI_API_KEY);
-      statusEl.innerText = "⏳ Analyserar innehållet...";
+      statusEl.innerText = "⏳ Analyserar innehållet med Gemini 3.6 Flash...";
     }
 
+    // TVINGAR ATT ENBART ANVÄNDA GEMINI-3.6-FLASH
+    const model = 'gemini-3.6-flash';
     let data = null;
-    let lastErrorMessage = "";
 
-    for (const model of modelsToTry) {
-      try {
-        console.log(`Testar modell: ${model}`);
-        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
-        let requestBody;
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
+    let requestBody;
 
-        if (textData) {
-          requestBody = { contents: [{ parts: [{ text: prompt + textData }] }] };
-        } else {
-          requestBody = {
-            contents: [{ parts: [
-              { text: prompt }, 
-              { fileData: { mimeType: uploadedFileRef.mimeType, fileUri: uploadedFileRef.fileUri } }
-            ]}]
-          };
-        }
-
-        let response = await fetch(apiUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(requestBody)
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error?.message || `HTTP error ${response.status}`);
-        }
-
-        data = await response.json();
-        console.log(`✅ Analys lyckades med modell: ${model}`);
-        break; 
-
-      } catch (err) {
-        console.warn(`❌ Modell ${model} misslyckades. Felet var:`, err.message);
-        lastErrorMessage = err.message;
-      }
+    if (textData) {
+      requestBody = { contents: [{ parts: [{ text: prompt + textData }] }] };
+    } else {
+      requestBody = {
+        contents: [{ parts: [
+          { text: prompt }, 
+          { fileData: { mimeType: uploadedFileRef.mimeType, fileUri: uploadedFileRef.fileUri } }
+        ]}]
+      };
     }
 
-    if (!data) throw new Error(`Din API-nyckel saknar behörighet. Google nekade åtkomst. Sista felet: ${lastErrorMessage}`);
-    if (!data.candidates || data.candidates.length === 0) throw new Error("Fick inget svar från AI.");
+    let response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody)
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error?.message || `HTTP error ${response.status}`);
+    }
+
+    data = await response.json();
+
+    if (!data || !data.candidates || data.candidates.length === 0) {
+      throw new Error("Fick inget svar från AI.");
+    }
 
     let aiText = data.candidates[0].content.parts[0].text;
     const jsonMatch = aiText.match(/\{[\s\S]*\}/);

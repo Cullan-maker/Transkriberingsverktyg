@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8">
+  <title>Smart Transkriberare</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 15px; background: #f8fafc; color: #334155; min-width: 380px; }
+    .header-container { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+    h1 { font-size: 1.5rem; margin: 0; color: #0f172a; display: flex; align-items: center; gap: 8px; }
+    .btn-popout { background: #e2e8f0; color: #475569; border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.85rem; display: flex; align-items: center; gap: 5px; transition: background 0.2s;}
+    .btn-popout:hover { background: #cbd5e1; }
+    .tabs { display: flex; gap: 5px; margin-bottom: 15px; border-bottom: 2px solid #e2e8f0; padding-bottom: 5px; overflow-x: auto; }
+    .tab-button { background: none; border: none; padding: 8px 12px; font-weight: 600; color: #64748b; cursor: pointer; border-radius: 6px; white-space: nowrap; }
+    .tab-button.active { background: #e0e7ff; color: #4f46e5; }
+    .tab-button:hover:not(.active) { background: #f1f5f9; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    .card { background: white; padding: 15px; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 15px; }
+    .btn-primary { background: #4f46e5; color: white; border: none; padding: 12px; width: 100%; border-radius: 8px; font-weight: bold; font-size: 1rem; cursor: pointer; margin-top: 10px; }
+    .btn-primary:hover { background: #4338ca; }
+    .btn-record { background: #ef4444; color: white; border: none; padding: 12px; width: 100%; border-radius: 8px; font-weight: bold; font-size: 1rem; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; }
+    .btn-record.recording { background: #b91c1c; animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.8; } 100% { opacity: 1; } }
+    textarea, input[type="text"], input[type="password"] { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; margin-top: 5px; font-family: inherit; }
+    textarea { resize: vertical; min-height: 100px; }
+    .upload-box { border: 2px dashed #cbd5e1; border-radius: 8px; padding: 20px; text-align: center; cursor: pointer; background: #f8fafc; transition: all 0.2s; position: relative; }
+    .upload-box:hover { border-color: #4f46e5; background: #eff6ff; }
+    .upload-box input[type="file"] { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+    .upload-icon { font-size: 2rem; margin-bottom: 10px; display: block; }
+    .file-status { margin-top: 10px; font-size: 0.9rem; color: #16a34a; font-weight: bold; display: none; }
+    #result { margin-top: 15px; padding: 15px; background: white; border-radius: 10px; border: 1px solid #e2e8f0; display: none; }
+    .history-item { padding: 10px; border-bottom: 1px solid #e2e8f0; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+    .history-item:hover { background: #f8fafc; }
+    .history-date { font-weight: bold; color: #4f46e5; font-size: 0.9rem; }
+    .history-delete { background: #fee2e2; color: #ef4444; border: none; border-radius: 4px; padding: 4px 8px; cursor: pointer; }
+    #visualizer { width: 100%; height: 60px; background: #f1f5f9; border-radius: 8px; margin-top: 10px; display: none; }
+    .speaker-color-btn { width: 25px; height: 25px; border-radius: 50%; border: 2px solid #cbd5e1; cursor: pointer; display: inline-block; margin-right: 5px; }
+    .speaker-controls { background: #f8fafc; padding: 10px; border-radius: 8px; margin-bottom: 15px; }
+    .error-box { background: #fee2e2; color: #b91c1c; padding: 10px; border-radius: 6px; margin-top: 10px; font-size: 0.9rem; display: none; border: 1px solid #f87171; }
+    .progress-container { width: 100%; background-color: #e2e8f0; border-radius: 8px; overflow: hidden; height: 12px; margin-top: 15px; }
+    .progress-bar { width: 0%; height: 100%; background-color: #4f46e5; transition: width 0.3s ease; }
+    .progress-text { text-align: center; margin-top: 5px; font-weight: bold; color: #4f46e5; font-size: 0.85rem; }
+  </style>
+</head>
+<body>
+  <div class="header-container">
+    <h1>🎙️ Smart Transkriberare</h1>
+    <button id="popoutBtn" class="btn-popout" title="Lossa fönstret så det inte stängs ner">↗️ Frigör</button>
+  </div>
+  <div class="tabs">
+    <button class="tab-button active" data-tab="audio">🎵 Ljudfil</button>
+    <button class="tab-button" data-tab="text">📝 Text</button>
+    <button class="tab-button" data-tab="live">🔴 Spela in Live</button>
+    <button class="tab-button" data-tab="history">📚 Historik</button>
+  </div>
+  <div id="audio" class="tab-content active card">
+    <div class="upload-box">
+      <span class="upload-icon">☁️</span>
+      <strong>Klicka för att välja ljudfil</strong><br>
+      <span style="font-size: 0.8rem; color: #64748b;">MP3, WAV, M4A</span>
+      <input type="file" id="audioFile" accept="audio/*">
+    </div>
+    <div id="fileStatus" class="file-status">✅ <span id="fileName"></span> vald.</div>
+  </div>
+  <div id="text" class="tab-content card">
+    <label for="textInput">Klistra in ostrukturerad text:</label>
+    <textarea id="textInput" placeholder="Klistra in anteckningar eller transkriberad text här..."></textarea>
+  </div>
+  <div id="live" class="tab-content card">
+    <p style="font-size: 0.9rem; color: #64748b;"><strong>Tips för Zoom:</strong> Ha ljudet i högtalarna (ej hörlurar).</p>
+    <button id="recordBtn" class="btn-record">🔴 Starta Inspelning</button>
+    <div id="timer" style="text-align: center; font-weight: bold; margin-top: 10px; font-size: 1.2rem;">00:00</div>
+    <canvas id="visualizer"></canvas>
+  </div>
+  <div id="history" class="tab-content card">
+    <p style="font-size: 0.9rem; color: #64748b;">Dina tidigare analyser sparas automatiskt här.</p>
+    <div id="historyList"></div>
+  </div>
+  <div id="settings" class="card">
+    <p style="margin: 0 0 5px 0; font-weight: bold; font-size: 0.9rem;">🔑 Google API-nyckel</p>
+    <input type="password" id="apiKeyInput" placeholder="Klistra in din API-nyckel här..." style="margin-bottom: 15px;">
+    
+    <p style="margin: 0 0 10px 0; font-weight: bold; font-size: 0.9rem;">⚙️ Längd på sammanfattning</p>
+    <div style="display: flex; gap: 10px; margin-bottom: 15px; font-size: 0.9rem;">
+      <label><input type="radio" name="summaryLength" value="kort"> Kort</label>
+      <label><input type="radio" name="summaryLength" value="mellan" checked> Mellan</label>
+      <label><input type="radio" name="summaryLength" value="lång"> Lång</label>
+    </div>
+    <label for="focusInput" style="font-weight: bold; font-size: 0.9rem;">Fokus (frivilligt)</label>
+    <input type="text" id="focusInput" placeholder="T.ex. 'Fokus på budget'">
+    
+    <button id="analyzeBtn" class="btn-primary">✨ Analysera Innehåll</button>
+    
+    <div id="progressWrapper" style="display: none;">
+      <div class="progress-container">
+        <div id="progressBar" class="progress-bar"></div>
+      </div>
+      <div id="progressText" class="progress-text">0%</div>
+    </div>
+    <div id="status" style="margin-top: 10px; font-weight: bold; text-align: center; color: #4f46e5;"></div>
+    <div id="errorBox" class="error-box"></div>
+  </div>
+  <div id="result"></div>
+  <script src="popup.js"></script>
+</body>
+</html>

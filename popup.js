@@ -7,7 +7,7 @@ let audioContext;
 let analyser;
 let visualizerAnimationId;
 let progressInterval;
-let wakeLock = null; // För att hålla skärmen vaken
+let wakeLock = null;
 
 const colors = ['#ffffff', '#dbeafe', '#dcfce7', '#fef9c3', '#f3e8ff', '#ffe4e6'];
 
@@ -18,7 +18,6 @@ document.addEventListener('DOMContentLoaded', () => {
   setupTabs();
   loadHistory();
   
-  // Återställ eventuell Auto-Save i realtid
   const autoSavedHtml = localStorage.getItem('currentDraftHTML');
   if (autoSavedHtml) {
     const resEl = document.getElementById('result');
@@ -27,7 +26,6 @@ document.addEventListener('DOMContentLoaded', () => {
     setupResultInteractivity();
   }
 
-  // Auto-Save vid varje textinmatning
   document.getElementById('result').addEventListener('input', () => {
     localStorage.setItem('currentDraftHTML', document.getElementById('result').innerHTML);
   });
@@ -64,7 +62,6 @@ function setupTabs() {
   });
 }
 
-// 1. WAKE LOCK API FÖR ATT HÅLLA SKÄRMEN VAKEN
 async function requestWakeLock() {
   try {
     if ('wakeLock' in navigator) {
@@ -92,7 +89,6 @@ async function toggleRecording() {
     releaseWakeLock();
   } else {
     try {
-      // 2. AVANCERADE MICK-INSTÄLLNINGAR
       const stream = await navigator.mediaDevices.getUserMedia({ 
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: false } 
       });
@@ -177,7 +173,7 @@ function loadHistory() {
     infoSpan.addEventListener('click', () => {
       document.getElementById('result').innerHTML = item.content;
       document.getElementById('result').style.display = 'block';
-      localStorage.setItem('currentDraftHTML', item.content); // Skriv in i Auto-Save
+      localStorage.setItem('currentDraftHTML', item.content);
       setupResultInteractivity();
     });
     const delBtn = document.createElement('button');
@@ -196,7 +192,6 @@ function loadHistory() {
   });
 }
 
-// 3. GOOGLE FILE API: UPPLADDNING FÖR STORA FILER
 async function uploadToGeminiFileAPI(fileBlob, apiKey) {
   let mimeType = fileBlob.type;
   if (!mimeType) {
@@ -205,7 +200,6 @@ async function uploadToGeminiFileAPI(fileBlob, apiKey) {
     else mimeType = 'audio/mp3'; 
   }
   
-  // Steg 1: Få uppladdnings-URL
   const startRes = await fetch(`https://generativelanguage.googleapis.com/upload/v1beta/files?key=${apiKey}`, {
     method: 'POST',
     headers: {
@@ -221,7 +215,6 @@ async function uploadToGeminiFileAPI(fileBlob, apiKey) {
   const uploadUrl = startRes.headers.get('X-Goog-Upload-URL');
   if(!uploadUrl) throw new Error("Kunde inte starta uppladdningen till Googles server.");
 
-  // Steg 2: Skicka själva filen
   const uploadRes = await fetch(uploadUrl, {
     method: 'POST',
     headers: {
@@ -235,7 +228,6 @@ async function uploadToGeminiFileAPI(fileBlob, apiKey) {
   let fileInfo = await uploadRes.json();
   let fileData = fileInfo.file;
 
-  // Steg 3: Om filen är en video behöver AI:n ofta tid att bearbeta den internt
   const statusEl = document.getElementById('status');
   while (fileData.state === 'PROCESSING') {
     statusEl.innerText = "⏳ Google bearbetar videon (Detta kan ta någon minut)...";
@@ -249,7 +241,6 @@ async function uploadToGeminiFileAPI(fileBlob, apiKey) {
   return { mimeType: fileData.mimeType, fileUri: fileData.uri };
 }
 
-// 4. ANALYS & MODELLVÄLJARE
 async function handleAnalysis() {
   const errorBox = document.getElementById('errorBox');
   errorBox.style.display = 'none';
@@ -308,18 +299,17 @@ async function handleAnalysis() {
     let uploadedFileRef = null;
     
     if (fileBlob) {
-      // ANVÄNDER NU DET KRAFtFULLA GOOGLE FILE API:ET
       uploadedFileRef = await uploadToGeminiFileAPI(fileBlob, GEMINI_API_KEY);
       statusEl.innerText = "⏳ Analyserar innehållet...";
     }
 
-    // ANPASSAD MODELL-LISTA UTIFRÅN ANVÄNDARENS VAL
+    // REN OCH UPPDATERAD MODELL-LISTA (Endast de som existerar skarpt hos Google just nu)
     const selectedModel = document.getElementById('modelSelect').value;
     let modelsToTry = [];
     if (selectedModel === 'auto') {
-       modelsToTry = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-1.5-flash'];
+       modelsToTry = ['gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-1.5-flash'];
     } else {
-       modelsToTry = [selectedModel]; // Låst till den specifika modellen!
+       modelsToTry = [selectedModel]; 
     }
 
     let data = null;
@@ -333,7 +323,6 @@ async function handleAnalysis() {
         if (textData) {
           requestBody = { contents: [{ parts: [{ text: prompt + textData }] }] };
         } else {
-          // Använder referensen från File API istället för Base64
           requestBody = {
             contents: [{ parts: [
               { text: prompt }, 
@@ -443,7 +432,6 @@ function renderResult(data) {
   resultEl.style.display = "block";
   statusEl.innerText = "✅ Analys klar!";
   
-  // Spara direkt till Auto-Save
   localStorage.setItem('currentDraftHTML', html);
   
   setupResultInteractivity();

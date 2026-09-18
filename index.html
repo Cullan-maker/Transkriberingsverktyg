@@ -8,7 +8,6 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <title>Transkriberare</title>
   
-  <!-- PDF-motor för säker export på mobilen -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
   <style>
@@ -44,13 +43,6 @@
       position: sticky;
       top: 0;
       z-index: 50;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .btn-popout {
-      background: #e2e8f0; color: #475569; border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.85rem;
     }
 
     .content-wrapper {
@@ -187,34 +179,21 @@
     .progress-bar { width: 0%; height: 100%; background-color: var(--primary); transition: width 0.3s ease; }
     .progress-text { text-align: center; margin-top: 8px; font-weight: bold; color: var(--primary); font-size: 0.95rem; }
 
-    /* FAST EXPORT MENY I BOTTEN */
-    .export-section { margin-top: 15px; padding: 20px; background: white; border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); display: none; }
+    /* EXPORT KNAPPAR */
+    .export-section { margin-top: 25px; border-top: 1px solid var(--border); padding-top: 20px; }
     .export-title { font-size: 1.05rem; font-weight: 800; color: var(--text); margin-bottom: 12px; text-align: center;}
     .export-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
     .btn-export { background: #f8fafc; border: 1px solid var(--border); padding: 14px; border-radius: 12px; font-weight: 700; color: var(--primary); display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.95rem; cursor: pointer; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.02); width: 100%; box-sizing: border-box;}
     .btn-export:active { transform: scale(0.96); background: #e2e8f0; }
-
-    /* CSS FÖR UTSKRIFT TILL PDF */
-    @media print {
-      body { background: white !important; margin: 0 !important; padding: 0 !important; }
-      header, .tabs, .tab-content, #settings, #exportContainer, .speaker-controls, h2:nth-of-type(2) { display: none !important; }
-      #result { display: block !important; box-shadow: none !important; border: none !important; padding: 0 !important; margin: 0 !important; }
-      .transcript-line { border: none !important; margin-bottom: 8px !important; break-inside: avoid; }
-      * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    }
   </style>
 </head>
 <body>
-
-  <header>
-    <span>🎙️ Transkriberare</span>
-    <button id="popoutBtn" class="btn-popout" title="Öppna i eget fönster">↗️ Frigör</button>
-  </header>
+  <header>🎙️ Transkriberare</header>
 
   <div class="tabs">
     <button class="tab-button active" data-tab="audio">
-      <span class="icon">📁</span>
-      <span>Media</span>
+      <span class="icon">🎵</span>
+      <span>Ljud</span>
     </button>
     <button class="tab-button" data-tab="text">
       <span class="icon">📝</span>
@@ -234,9 +213,9 @@
     <div id="audio" class="tab-content active card">
       <div class="upload-box">
         <span class="upload-icon">☁️</span>
-        <strong style="font-size: 1.1rem;">Välj Ljud eller Video</strong><br>
-        <span style="font-size: 0.85rem; color: #64748b; margin-top: 5px; display: block;">MP3, WAV, M4A, MP4, MOV (Upp till 2 GB)</span>
-        <input type="file" id="audioFile" accept="audio/*,video/*">
+        <strong style="font-size: 1.1rem;">Välj ljudfil</strong><br>
+        <span style="font-size: 0.85rem; color: #64748b; margin-top: 5px; display: block;">MP3, WAV, M4A</span>
+        <input type="file" id="audioFile" accept="audio/*">
       </div>
       <div id="fileStatus" class="file-status">✅ <span id="fileName"></span> vald.</div>
     </div>
@@ -283,24 +262,10 @@
       <div id="status" style="margin-top: 15px; font-weight: bold; text-align: center; color: #4f46e5; font-size: 1.1rem;"></div>
       <div id="errorBox" class="error-box"></div>
     </div>
-    
-    <!-- RESULTAT RUTA -->
     <div id="result"></div>
-
-    <!-- FAST EXPORTMENY (Alltid under resultatet) -->
-    <div class="export-section" id="exportContainer">
-      <div class="export-title">⬇️ Spara eller exportera</div>
-      <div class="export-grid">
-        <button class="btn-export" id="exportCopy">📋 Kopiera</button>
-        <button class="btn-export" id="exportEmail">✉️ Mejla</button>
-        <button class="btn-export" id="exportTxt">📄 Text (.txt)</button>
-        <button class="btn-export" id="exportWord">📝 Word (.doc)</button>
-      </div>
-      <button class="btn-export" id="exportPdf" style="width: 100%;">📕 Spara som PDF</button>
-    </div>
-
   </div>
   
-  <script src="popup.js"></script>
+  <!-- CACHE BUSTING v200 -->
+  <script src="popup.js?v=200"></script>
 </body>
 </html>

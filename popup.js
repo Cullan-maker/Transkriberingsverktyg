@@ -1,4 +1,3 @@
-
 let mediaRecorder;
 let audioChunks = [];
 let recordingInterval;
@@ -162,7 +161,7 @@ function loadHistory() {
   });
 }
 
-// BÖRJAR MED DE MEST AVANCERADE MODELLERNA FÖRST
+// FULL FALLBACK-LOOP MED PRO-MODELLEN FÖRST
 async function handleAnalysis() {
   const errorBox = document.getElementById('errorBox');
   errorBox.style.display = 'none';
@@ -237,12 +236,13 @@ async function handleAnalysis() {
         reader.readAsDataURL(fileBlob);
       });
     }
-    // PRIORITERAD LISTA: De mest avancerade/senaste modellerna först
+
+    // TESTAR ALLA DESSA MODELLER I ORDNING TILLS DEN LYCKAS
     const modelsToTry = [
-      'gemini-1.5-pro', 
+      'gemini-1.5-pro',
       'gemini-2.5-flash',
       'gemini-2.0-flash', 
-      'gemini-1.5-flash', 
+      'gemini-1.5-flash',
       'gemini-3.6-flash'
     ];
 
@@ -276,17 +276,17 @@ async function handleAnalysis() {
         }
 
         data = await response.json();
-        console.log(`✅ Analys lyckades med avancerad modell: ${model}`);
+        console.log(`✅ Analys lyckades med modell: ${model}`);
         break; 
 
       } catch (err) {
-        console.warn(`❌ Modell ${model} misslyckades, testar nästa... Felet var:`, err.message);
+        console.warn(`❌ Modell ${model} misslyckades. Går vidare... Felet var:`, err.message);
         lastErrorMessage = err.message;
       }
     }
 
     if (!data) {
-      throw new Error("Alla AI-modeller misslyckades. Sista felet: " + lastErrorMessage);
+      throw new Error("Alla AI-modeller misslyckades! Sista felet: " + lastErrorMessage);
     }
 
     if (!data.candidates || data.candidates.length === 0) {
@@ -428,8 +428,6 @@ function setupResultInteractivity() {
   bindClick('exportPdf', exportToPdf);
 }
 
-// --- EXPORT FUNKTIONER ---
-
 function getCleanText() {
   let text = "--- SAMMANFATTNING ---\n\n";
   const summaryP = document.getElementById('summaryText');
@@ -482,7 +480,7 @@ function exportToFile(type) {
       <p>${document.getElementById('summaryText')?.innerText || ''}</p>
       <br><h2>Transkription</h2>
       ${Array.from(document.querySelectorAll('.transcript-line')).map(line => 
-        `<p style="margin-bottom:8px;"><strong>${line.querySelector('.speaker-label').innerText}:</strong><br>${line.querySelector('span[contenteditable]').innerText}</p>`
+        `<p style="margin-bottom:8px;"><strong>${line.querySelector('.speaker-label').innerText}:</strong><br> ${line.querySelector('span[contenteditable]').innerText}</p>`
       ).join('')}
       </body></html>
     `;

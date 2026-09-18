@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Transkriberare",
-  "version": "1.3",
-  "description": "Mobilanpassad transkriberare",
+  "version": "1.5",
+  "description": "Mobilanpassad transkriberare med export",
   "action": {
     "default_popup": "index.html"
   },

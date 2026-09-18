@@ -15,26 +15,6 @@ document.addEventListener('DOMContentLoaded', () => {
   setupTabs();
   loadHistory();
   
-  if (window.location.search.includes('mode=popout')) {
-    const btn = document.getElementById('popoutBtn');
-    if(btn) btn.style.display = 'none';
-  }
-  
-  const popoutBtn = document.getElementById('popoutBtn');
-  if(popoutBtn) {
-    popoutBtn.addEventListener('click', () => {
-      if (typeof chrome !== 'undefined' && chrome.windows) {
-        chrome.windows.create({
-          url: chrome.runtime.getURL("index.html?mode=popout"),
-          type: "popup",
-          width: 440,
-          height: 750
-        });
-        window.close();
-      }
-    });
-  }
-
   document.getElementById('analyzeBtn').addEventListener('click', handleAnalysis);
   document.getElementById('recordBtn').addEventListener('click', toggleRecording);
   
@@ -334,7 +314,7 @@ function renderResult(data) {
   const resultEl = document.getElementById('result');
   const statusEl = document.getElementById('status');
 
-  let html = `<h2>📋 Sammanfattning</h2><p>${data.summary}</p>`;
+  let html = `<h2>📋 Sammanfattning</h2><p id="summaryText">${data.summary}</p>`;
   html += `<h2>👥 Hantera Talare</h2><div class="speaker-controls" id="speakerControls">`;
   data.speakers.forEach((speaker) => {
     html += `
@@ -358,6 +338,20 @@ function renderResult(data) {
       </div>`;
   });
   html += `</div>`;
+  
+  // Lägg till export-knappar med nya E-postknappen
+  html += `
+    <div class="export-section" id="exportContainer">
+      <div class="export-title">⬇️ Spara eller exportera</div>
+      <div class="export-grid">
+        <button class="btn-export" id="exportCopy">📋 Kopiera</button>
+        <button class="btn-export" id="exportEmail">✉️ Mejla</button>
+        <button class="btn-export" id="exportTxt">📄 Text (.txt)</button>
+        <button class="btn-export" id="exportWord">📝 Word (.doc)</button>
+      </div>
+      <button class="btn-export" id="exportPdf" style="width: 100%;">📕 Spara som PDF</button>
+    </div>
+  `;
 
   resultEl.innerHTML = html;
   resultEl.style.display = "block";
@@ -368,6 +362,7 @@ function renderResult(data) {
 }
 
 function setupResultInteractivity() {
+  // Hantera redigering av talare
   document.querySelectorAll('.speaker-name-input, .speaker-role-input').forEach(input => {
     input.addEventListener('input', () => {
       const original = input.getAttribute('data-original');
@@ -380,6 +375,8 @@ function setupResultInteractivity() {
       });
     });
   });
+  
+  // Hantera färgbyten på talare
   document.querySelectorAll('.speaker-color-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       const speakerId = e.target.getAttribute('data-speaker');
@@ -388,5 +385,117 @@ function setupResultInteractivity() {
         line.style.backgroundColor = chosenColor;
       });
     });
+  });
+
+  // Knyta funktioner till exportknapparna säkert
+  const bindClick = (id, func) => {
+    const btn = document.getElementById(id);
+    if (btn) {
+      const newBtn = btn.cloneNode(true);
+      btn.parentNode.replaceChild(newBtn, btn);
+      newBtn.addEventListener('click', func);
+    }
+  };
+
+  bindClick('exportCopy', exportToClipboard);
+  bindClick('exportEmail', exportToEmail);
+  bindClick('exportTxt', () => exportToFile('txt'));
+  bindClick('exportWord', () => exportToFile('word'));
+  bindClick('exportPdf', exportToPdf);
+}
+
+// --- EXPORT FUNKTIONER ---
+
+function getCleanText() {
+  let text = "--- SAMMANFATTNING ---\n\n";
+  const summaryP = document.getElementById('summaryText');
+  if(summaryP) text += summaryP.innerText + "\n\n";
+  
+  text += "--- TRANSKRIPTION ---\n\n";
+  document.querySelectorAll('.transcript-line').forEach(line => {
+      const speaker = line.querySelector('.speaker-label').innerText;
+      const spokenText = line.querySelector('span[contenteditable]').innerText;
+      text += `${speaker}: ${spokenText}\n\n`;
+  });
+  return text;
+}
+
+function exportToClipboard() {
+  const text = getCleanText();
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(() => alert("✅ Kopierat till urklipp!"));
+  } else {
+    const textArea = document.createElement("textarea");
+    textArea.value = text;
+    document.body.appendChild(textArea);
+    textArea.select();
+    document.execCommand("copy");
+    document.body.removeChild(textArea);
+    alert("✅ Kopierat till urklipp!");
+  }
+}
+
+function exportToEmail() {
+  const text = getCleanText();
+  const subject = encodeURIComponent("Transkription och sammanfattning");
+  const body = encodeURIComponent(text);
+  
+  // Öppnar telefonens/datorns standard-mejlapp
+  window.location.href = `mailto:?subject=${subject}&body=${body}`;
+}
+
+function exportToFile(type) {
+  const text = getCleanText();
+  let blob;
+  let filename;
+
+  if (type === 'txt') {
+    blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    filename = 'Transkription.txt';
+  } else if (type === 'word') {
+    const htmlContent = `
+      <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+      <head><meta charset='utf-8'><title>Transkription</title></head><body>
+      <h2>Sammanfattning</h2>
+      <p>${document.getElementById('summaryText')?.innerText || ''}</p>
+      <br><h2>Transkription</h2>
+      ${Array.from(document.querySelectorAll('.transcript-line')).map(line => 
+        `<p style="margin-bottom:8px;"><strong>${line.querySelector('.speaker-label').innerText}:</strong><br> ${line.querySelector('span[contenteditable]').innerText}</p>`
+      ).join('')}
+      </body></html>
+    `;
+    blob = new Blob(['\ufeff', htmlContent], { type: 'application/msword' });
+    filename = 'Transkription.doc';
+  }
+
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+function exportToPdf() {
+  const exportContainer = document.getElementById('exportContainer');
+  if(exportContainer) exportContainer.style.display = 'none';
+  
+  const element = document.getElementById('result');
+  const opt = {
+    margin:       15,
+    filename:     'Transkription.pdf',
+    image:        { type: 'jpeg', quality: 0.98 },
+    html2canvas:  { scale: 2, useCORS: true },
+    jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+  };
+
+  if (typeof html2pdf === 'undefined') {
+    alert("PDF-motorn laddas fortfarande in. Vänta 2 sekunder och försök igen!");
+    if(exportContainer) exportContainer.style.display = 'flex';
+    return;
+  }
+
+  html2pdf().set(opt).from(element).save().then(() => {
+    if(exportContainer) exportContainer.style.display = 'block';
   });
 }

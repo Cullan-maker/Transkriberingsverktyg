@@ -7,14 +7,35 @@ let audioContext;
 let analyser;
 let visualizerAnimationId;
 let progressInterval;
+let wakeLock = null; // För att hålla skärmen vaken
 
 const colors = ['#ffffff', '#dbeafe', '#dcfce7', '#fef9c3', '#f3e8ff', '#ffe4e6'];
 
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('apiKeyInput').value = localStorage.getItem('geminiApiKey') || '';
+  document.getElementById('modelSelect').value = localStorage.getItem('geminiModel') || 'auto';
+  
   setupTabs();
   loadHistory();
   
+  // Återställ eventuell Auto-Save i realtid
+  const autoSavedHtml = localStorage.getItem('currentDraftHTML');
+  if (autoSavedHtml) {
+    const resEl = document.getElementById('result');
+    resEl.innerHTML = autoSavedHtml;
+    resEl.style.display = 'block';
+    setupResultInteractivity();
+  }
+
+  // Auto-Save vid varje textinmatning
+  document.getElementById('result').addEventListener('input', () => {
+    localStorage.setItem('currentDraftHTML', document.getElementById('result').innerHTML);
+  });
+  
+  document.getElementById('modelSelect').addEventListener('change', (e) => {
+    localStorage.setItem('geminiModel', e.target.value);
+  });
+
   document.getElementById('analyzeBtn').addEventListener('click', handleAnalysis);
   document.getElementById('recordBtn').addEventListener('click', toggleRecording);
   
@@ -43,6 +64,18 @@ function setupTabs() {
   });
 }
 
+// 1. WAKE LOCK API FÖR ATT HÅLLA SKÄRMEN VAKEN
+async function requestWakeLock() {
+  try {
+    if ('wakeLock' in navigator) {
+      wakeLock = await navigator.wakeLock.request('screen');
+    }
+  } catch (err) { console.warn("Wake Lock misslyckades", err); }
+}
+function releaseWakeLock() {
+  if (wakeLock !== null) { wakeLock.release().then(() => wakeLock = null); }
+}
+
 async function toggleRecording() {
   const btn = document.getElementById('recordBtn');
   const timerDisplay = document.getElementById('timer');
@@ -56,9 +89,13 @@ async function toggleRecording() {
     if(visualizerAnimationId) cancelAnimationFrame(visualizerAnimationId);
     if(audioContext) audioContext.close();
     visualizer.style.display = 'none';
+    releaseWakeLock();
   } else {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // 2. AVANCERADE MICK-INSTÄLLNINGAR
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: false } 
+      });
       mediaRecorder = new MediaRecorder(stream);
       audioChunks = [];
       mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
@@ -67,6 +104,8 @@ async function toggleRecording() {
         document.getElementById('status').innerText = 'Ljud inspelat! Klicka på Analysera.';
         stream.getTracks().forEach(track => track.stop());
       };
+      
+      requestWakeLock();
       mediaRecorder.start();
       secondsRecorded = 0;
       timerDisplay.innerText = '00:00';
@@ -97,15 +136,13 @@ function startVisualizer(stream) {
   analyser.fftSize = 256;
   const bufferLength = analyser.frequencyBinCount;
   const dataArray = new Uint8Array(bufferLength);
-
   function draw() {
     visualizerAnimationId = requestAnimationFrame(draw);
     analyser.getByteFrequencyData(dataArray);
     canvasCtx.fillStyle = '#f1f5f9';
     canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
     const barWidth = (canvas.width / bufferLength) * 2.5;
-    let barHeight;
-    let x = 0;
+    let barHeight, x = 0;
     for(let i = 0; i < bufferLength; i++) {
       barHeight = dataArray[i] / 2;
       canvasCtx.fillStyle = '#4f46e5';
@@ -129,10 +166,7 @@ function saveToHistory(htmlContent) {
 function loadHistory() {
   const historyList = document.getElementById('historyList');
   let history = JSON.parse(localStorage.getItem('transcriptsHistory') || '[]');
-  if(history.length === 0) {
-    historyList.innerHTML = '<p style="color:#94a3b8; font-style:italic;">Ingen historik ännu.</p>';
-    return;
-  }
+  if(history.length === 0) { historyList.innerHTML = '<p style="color:#94a3b8; font-style:italic;">Ingen historik ännu.</p>'; return; }
   historyList.innerHTML = '';
   history.forEach(item => {
     const div = document.createElement('div');
@@ -143,6 +177,7 @@ function loadHistory() {
     infoSpan.addEventListener('click', () => {
       document.getElementById('result').innerHTML = item.content;
       document.getElementById('result').style.display = 'block';
+      localStorage.setItem('currentDraftHTML', item.content); // Skriv in i Auto-Save
       setupResultInteractivity();
     });
     const delBtn = document.createElement('button');
@@ -161,17 +196,66 @@ function loadHistory() {
   });
 }
 
-// FULL FALLBACK-LOOP MED FILMER OCH LJUD
+// 3. GOOGLE FILE API: UPPLADDNING FÖR STORA FILER
+async function uploadToGeminiFileAPI(fileBlob, apiKey) {
+  let mimeType = fileBlob.type;
+  if (!mimeType) {
+    if (fileBlob.name && fileBlob.name.toLowerCase().endsWith('.mp4')) mimeType = 'video/mp4';
+    else if (fileBlob.name && fileBlob.name.toLowerCase().endsWith('.mov')) mimeType = 'video/quicktime';
+    else mimeType = 'audio/mp3'; 
+  }
+  
+  // Steg 1: Få uppladdnings-URL
+  const startRes = await fetch(`https://generativelanguage.googleapis.com/upload/v1beta/files?key=${apiKey}`, {
+    method: 'POST',
+    headers: {
+      'X-Goog-Upload-Protocol': 'resumable',
+      'X-Goog-Upload-Command': 'start',
+      'X-Goog-Upload-Header-Content-Length': fileBlob.size.toString(),
+      'X-Goog-Upload-Header-Content-Type': mimeType,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ file: { display_name: fileBlob.name || "mobil_upload" } })
+  });
+  
+  const uploadUrl = startRes.headers.get('X-Goog-Upload-URL');
+  if(!uploadUrl) throw new Error("Kunde inte starta uppladdningen till Googles server.");
+
+  // Steg 2: Skicka själva filen
+  const uploadRes = await fetch(uploadUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Length': fileBlob.size.toString(),
+      'X-Goog-Upload-Offset': '0',
+      'X-Goog-Upload-Command': 'upload, finalize'
+    },
+    body: fileBlob
+  });
+  
+  let fileInfo = await uploadRes.json();
+  let fileData = fileInfo.file;
+
+  // Steg 3: Om filen är en video behöver AI:n ofta tid att bearbeta den internt
+  const statusEl = document.getElementById('status');
+  while (fileData.state === 'PROCESSING') {
+    statusEl.innerText = "⏳ Google bearbetar videon (Detta kan ta någon minut)...";
+    await new Promise(r => setTimeout(r, 4000));
+    const checkRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/files/${fileData.name}?key=${apiKey}`);
+    fileData = await checkRes.json();
+  }
+  
+  if (fileData.state === 'FAILED') throw new Error("Google kunde inte bearbeta denna mediatyp.");
+  
+  return { mimeType: fileData.mimeType, fileUri: fileData.uri };
+}
+
+// 4. ANALYS & MODELLVÄLJARE
 async function handleAnalysis() {
   const errorBox = document.getElementById('errorBox');
   errorBox.style.display = 'none';
 
   const GEMINI_API_KEY = document.getElementById('apiKeyInput').value.trim();
-  if (!GEMINI_API_KEY) {
-    showError("Du måste klistra in din API-nyckel under inställningar!");
-    return;
-  }
-  
+  if (!GEMINI_API_KEY) return showError("Du måste klistra in din API-nyckel under inställningar!");
   localStorage.setItem('geminiApiKey', GEMINI_API_KEY);
 
   const activeTab = document.querySelector('.tab-button.active').getAttribute('data-tab');
@@ -179,7 +263,6 @@ async function handleAnalysis() {
   const focusInput = document.getElementById('focusInput').value;
   const statusEl = document.getElementById('status');
   const resultEl = document.getElementById('result');
-  
   const progressWrapper = document.getElementById('progressWrapper');
   const progressBar = document.getElementById('progressBar');
   const progressText = document.getElementById('progressText');
@@ -193,10 +276,9 @@ async function handleAnalysis() {
   } else {
     fileBlob = activeTab === 'audio' ? document.getElementById('audioFile').files[0] : recordedAudioBlob;
     if (!fileBlob) return showError("Välj eller spela in en mediafil först!");
-    
-    // Varning för stora filer (webbläsaren kan krascha vid konvertering av GB-filer)
-    if (fileBlob.size > 20 * 1024 * 1024) {
-      console.warn("Filen är mycket stor. Om webbläsaren hänger sig, prova en mindre fil.");
+    if (fileBlob.size > 2 * 1024 * 1024 * 1024) {
+      showError("Varning: Filen är över 2 GB. Telefonens RAM-minne kommer krascha.");
+      return;
     }
   }
 
@@ -206,85 +288,65 @@ async function handleAnalysis() {
   "transcript" (en array med objekt: {"speaker": "Talare 1", "text": "vad som sades..."}). 
   Viktigt: Din output måste vara giltig JSON. Använd inte markdown runtom, bara rå JSON.\n\n`;
 
-  statusEl.innerText = "⏳ Läser in fil (detta kan ta en stund för stora filer)...";
-  resultEl.style.display = "none";
+  statusEl.innerText = "⏳ Laddar upp filen säkert till Google...";
   progressWrapper.style.display = "block";
   
   let currentProgress = 0;
   progressBar.style.width = '0%';
   progressText.innerText = '0%';
-
   clearInterval(progressInterval);
   progressInterval = setInterval(() => {
     let step = (95 - currentProgress) * 0.03;
     if (step < 0.1) step = 0.1; 
     currentProgress += step;
     if (currentProgress > 95) currentProgress = 95;
-
     progressBar.style.width = currentProgress + '%';
     progressText.innerText = Math.floor(currentProgress) + '%';
   }, 500);
 
   try {
-    let data = null;
-    let lastErrorMessage = "";
-    
-    let base64Audio = null;
-    let mimeType = null;
+    let uploadedFileRef = null;
     
     if (fileBlob) {
-      // Identifiera filtyp för Video eller Audio
-      mimeType = fileBlob.type;
-      if (!mimeType) {
-        if (fileBlob.name && fileBlob.name.toLowerCase().endsWith('.mp4')) mimeType = 'video/mp4';
-        else if (fileBlob.name && fileBlob.name.toLowerCase().endsWith('.mov')) mimeType = 'video/quicktime';
-        else mimeType = 'audio/mp3'; // Standard om okänt
-      }
-
-      base64Audio = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          const result = reader.result;
-          resolve(result.includes(',') ? result.split(',')[1] : result);
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(fileBlob);
-      });
-      statusEl.innerText = "⏳ Fil inläst. AI analyserar...";
+      // ANVÄNDER NU DET KRAFtFULLA GOOGLE FILE API:ET
+      uploadedFileRef = await uploadToGeminiFileAPI(fileBlob, GEMINI_API_KEY);
+      statusEl.innerText = "⏳ Analyserar innehållet...";
     }
 
-    // TESTAR ALLA DESSA MODELLER I ORDNING TILLS DEN LYCKAS
-    const modelsToTry = [
-      'gemini-2.5-flash',
-      'gemini-2.0-flash', 
-      'gemini-1.5-pro',
-      'gemini-1.5-flash',
-      'gemini-3.6-flash'
-    ];
+    // ANPASSAD MODELL-LISTA UTIFRÅN ANVÄNDARENS VAL
+    const selectedModel = document.getElementById('modelSelect').value;
+    let modelsToTry = [];
+    if (selectedModel === 'auto') {
+       modelsToTry = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-1.5-flash'];
+    } else {
+       modelsToTry = [selectedModel]; // Låst till den specifika modellen!
+    }
+
+    let data = null;
+    let lastErrorMessage = "";
 
     for (const model of modelsToTry) {
       try {
         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
-        let response;
+        let requestBody;
 
         if (textData) {
-          response = await fetch(apiUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ contents: [{ parts: [{ text: prompt + textData }] }] })
-          });
+          requestBody = { contents: [{ parts: [{ text: prompt + textData }] }] };
         } else {
-          response = await fetch(apiUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ parts: [
-                { text: prompt }, 
-                { inlineData: { mimeType: mimeType, data: base64Audio } }
-              ]}]
-            })
-          });
+          // Använder referensen från File API istället för Base64
+          requestBody = {
+            contents: [{ parts: [
+              { text: prompt }, 
+              { fileData: { mimeType: uploadedFileRef.mimeType, fileUri: uploadedFileRef.fileUri } }
+            ]}]
+          };
         }
+
+        let response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody)
+        });
 
         if (!response.ok) {
           const errorData = await response.json();
@@ -296,26 +358,18 @@ async function handleAnalysis() {
         break; 
 
       } catch (err) {
-        console.warn(`❌ Modell ${model} misslyckades. Går vidare... Felet var:`, err.message);
+        console.warn(`❌ Modell ${model} misslyckades. Felet var:`, err.message);
         lastErrorMessage = err.message;
       }
     }
 
-    if (!data) {
-      throw new Error("Alla AI-modeller misslyckades! Sista felet: " + lastErrorMessage);
-    }
-
-    if (!data.candidates || data.candidates.length === 0) {
-      throw new Error("Fick inget svar från AI. Den kanske bedömde innehållet som otillåtet.");
-    }
+    if (!data) throw new Error("AI-modellen misslyckades! Sista felet: " + lastErrorMessage);
+    if (!data.candidates || data.candidates.length === 0) throw new Error("Fick inget svar från AI.");
 
     let aiText = data.candidates[0].content.parts[0].text;
     const jsonMatch = aiText.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      aiText = jsonMatch[0];
-    } else {
-      aiText = aiText.replace(/```json/gi, '').replace(/```/g, '').trim();
-    }
+    if (jsonMatch) aiText = jsonMatch[0];
+    else aiText = aiText.replace(/```json/gi, '').replace(/```/g, '').trim();
     
     const resultObj = JSON.parse(aiText);
     
@@ -332,18 +386,7 @@ async function handleAnalysis() {
     clearInterval(progressInterval);
     progressWrapper.style.display = "none";
     statusEl.innerText = "";
-    
-    let userMsg = "Fel vid kommunikation med AI.";
-    if (error.message.includes('JSON')) {
-      userMsg = "AI svarade, men det gick inte att tolka svaret. Prova igen.";
-    } else if (error.message.includes('400') || error.message.toLowerCase().includes('size') || error.message.toLowerCase().includes('payload')) {
-      userMsg = "Filen är för stor för att skickas direkt via webbläsaren. Prova en mindre fil, klipp videon eller konvertera till enbart ljud.";
-    } else if (error.message.toLowerCase().includes('demand')) {
-      userMsg = "Googles system är tillfälligt överbelastat. Vänta en minut och klicka på Analysera igen.";
-    } else {
-      userMsg = `Tekniskt fel: ${error.message}`;
-    }
-    showError(userMsg);
+    showError(error.message);
   }
 }
 
@@ -400,6 +443,9 @@ function renderResult(data) {
   resultEl.style.display = "block";
   statusEl.innerText = "✅ Analys klar!";
   
+  // Spara direkt till Auto-Save
+  localStorage.setItem('currentDraftHTML', html);
+  
   setupResultInteractivity();
   saveToHistory(html);
 }
@@ -415,6 +461,7 @@ function setupResultInteractivity() {
       document.querySelectorAll(`.speaker-label[data-speaker="${original}"]`).forEach(label => {
         label.innerText = combined;
       });
+      localStorage.setItem('currentDraftHTML', document.getElementById('result').innerHTML);
     });
   });
   
@@ -425,6 +472,7 @@ function setupResultInteractivity() {
       document.querySelectorAll(`.transcript-line[data-speaker="${speakerId}"]`).forEach(line => {
         line.style.backgroundColor = chosenColor;
       });
+      localStorage.setItem('currentDraftHTML', document.getElementById('result').innerHTML);
     });
   });
 

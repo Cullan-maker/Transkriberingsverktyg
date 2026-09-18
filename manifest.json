@@ -1,15 +1,16 @@
 {
-  "manifest_version": 3,
-  "name": "Transkriberare",
-  "version": "3.0",
-  "description": "Mobilapp med video och AI-fallback",
-  "action": {
-    "default_popup": "index.html"
-  },
-  "permissions": [
-    "storage"
-  ],
-  "host_permissions": [
-    "https://generativelanguage.googleapis.com/*"
+  "name": "Transkriberare Pro",
+  "short_name": "Transkriberare",
+  "description": "Mobilanpassad transkriberare med AI.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#f1f5f9",
+  "theme_color": "#f1f5f9",
+  "icons": [
+    {
+      "src": "icon.png",
+      "sizes": "128x128",
+      "type": "image/png"
+    }
   ]
 }

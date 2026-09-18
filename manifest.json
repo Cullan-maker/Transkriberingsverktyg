@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Transkriberare",
-  "version": "2.0",
-  "description": "Stabil mobilversion",
+  "version": "3.0",
+  "description": "Mobilapp med video och AI-fallback",
   "action": {
     "default_popup": "index.html"
   },

@@ -161,7 +161,7 @@ function loadHistory() {
   });
 }
 
-// FULL FALLBACK-LOOP MED PRO-MODELLEN FÖRST
+// FULL FALLBACK-LOOP MED FILMER OCH LJUD
 async function handleAnalysis() {
   const errorBox = document.getElementById('errorBox');
   errorBox.style.display = 'none';
@@ -192,9 +192,11 @@ async function handleAnalysis() {
     if (!textData) return showError("Klistra in text först!");
   } else {
     fileBlob = activeTab === 'audio' ? document.getElementById('audioFile').files[0] : recordedAudioBlob;
-    if (!fileBlob) return showError("Välj eller spela in en ljudfil först!");
-    if (fileBlob.size > 15 * 1024 * 1024) {
-      showError("Varning: Filen är över 15MB. API:et kan misslyckas.");
+    if (!fileBlob) return showError("Välj eller spela in en mediafil först!");
+    
+    // Varning för stora filer (webbläsaren kan krascha vid konvertering av GB-filer)
+    if (fileBlob.size > 20 * 1024 * 1024) {
+      console.warn("Filen är mycket stor. Om webbläsaren hänger sig, prova en mindre fil.");
     }
   }
 
@@ -204,18 +206,18 @@ async function handleAnalysis() {
   "transcript" (en array med objekt: {"speaker": "Talare 1", "text": "vad som sades..."}). 
   Viktigt: Din output måste vara giltig JSON. Använd inte markdown runtom, bara rå JSON.\n\n`;
 
-  statusEl.innerText = "⏳ Laddar upp och bearbetar...";
+  statusEl.innerText = "⏳ Läser in fil (detta kan ta en stund för stora filer)...";
   resultEl.style.display = "none";
-  
   progressWrapper.style.display = "block";
+  
   let currentProgress = 0;
   progressBar.style.width = '0%';
   progressText.innerText = '0%';
 
   clearInterval(progressInterval);
   progressInterval = setInterval(() => {
-    let step = (95 - currentProgress) * 0.05;
-    if (step < 0.2) step = 0.2; 
+    let step = (95 - currentProgress) * 0.03;
+    if (step < 0.1) step = 0.1; 
     currentProgress += step;
     if (currentProgress > 95) currentProgress = 95;
 
@@ -228,20 +230,34 @@ async function handleAnalysis() {
     let lastErrorMessage = "";
     
     let base64Audio = null;
+    let mimeType = null;
+    
     if (fileBlob) {
+      // Identifiera filtyp för Video eller Audio
+      mimeType = fileBlob.type;
+      if (!mimeType) {
+        if (fileBlob.name && fileBlob.name.toLowerCase().endsWith('.mp4')) mimeType = 'video/mp4';
+        else if (fileBlob.name && fileBlob.name.toLowerCase().endsWith('.mov')) mimeType = 'video/quicktime';
+        else mimeType = 'audio/mp3'; // Standard om okänt
+      }
+
       base64Audio = await new Promise((resolve, reject) => {
         const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result.split(',')[1]);
+        reader.onloadend = () => {
+          const result = reader.result;
+          resolve(result.includes(',') ? result.split(',')[1] : result);
+        };
         reader.onerror = reject;
         reader.readAsDataURL(fileBlob);
       });
+      statusEl.innerText = "⏳ Fil inläst. AI analyserar...";
     }
 
     // TESTAR ALLA DESSA MODELLER I ORDNING TILLS DEN LYCKAS
     const modelsToTry = [
-      'gemini-1.5-pro',
       'gemini-2.5-flash',
       'gemini-2.0-flash', 
+      'gemini-1.5-pro',
       'gemini-1.5-flash',
       'gemini-3.6-flash'
     ];
@@ -264,7 +280,7 @@ async function handleAnalysis() {
             body: JSON.stringify({
               contents: [{ parts: [
                 { text: prompt }, 
-                { inlineData: { mimeType: fileBlob.type || 'audio/mp3', data: base64Audio } }
+                { inlineData: { mimeType: mimeType, data: base64Audio } }
               ]}]
             })
           });
@@ -290,7 +306,7 @@ async function handleAnalysis() {
     }
 
     if (!data.candidates || data.candidates.length === 0) {
-      throw new Error("Fick inget svar från AI. Den kanske bedömde ljudet som otillåtet innehåll.");
+      throw new Error("Fick inget svar från AI. Den kanske bedömde innehållet som otillåtet.");
     }
 
     let aiText = data.candidates[0].content.parts[0].text;
@@ -321,7 +337,7 @@ async function handleAnalysis() {
     if (error.message.includes('JSON')) {
       userMsg = "AI svarade, men det gick inte att tolka svaret. Prova igen.";
     } else if (error.message.includes('400') || error.message.toLowerCase().includes('size') || error.message.toLowerCase().includes('payload')) {
-      userMsg = "Ljudfilen är för stor för att skickas direkt via webbläsaren. Prova en kortare fil eller konvertera till lägre ljudkvalitet.";
+      userMsg = "Filen är för stor för att skickas direkt via webbläsaren. Prova en mindre fil, klipp videon eller konvertera till enbart ljud.";
     } else if (error.message.toLowerCase().includes('demand')) {
       userMsg = "Googles system är tillfälligt överbelastat. Vänta en minut och klicka på Analysera igen.";
     } else {

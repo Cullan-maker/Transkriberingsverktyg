@@ -179,7 +179,6 @@
     .progress-bar { width: 0%; height: 100%; background-color: var(--primary); transition: width 0.3s ease; }
     .progress-text { text-align: center; margin-top: 8px; font-weight: bold; color: var(--primary); font-size: 0.95rem; }
 
-    /* EXPORT KNAPPAR */
     .export-section { margin-top: 25px; border-top: 1px solid var(--border); padding-top: 20px; }
     .export-title { font-size: 1.05rem; font-weight: 800; color: var(--text); margin-bottom: 12px; text-align: center;}
     .export-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
@@ -192,8 +191,8 @@
 
   <div class="tabs">
     <button class="tab-button active" data-tab="audio">
-      <span class="icon">🎵</span>
-      <span>Ljud</span>
+      <span class="icon">📁</span>
+      <span>Media</span>
     </button>
     <button class="tab-button" data-tab="text">
       <span class="icon">📝</span>
@@ -213,9 +212,10 @@
     <div id="audio" class="tab-content active card">
       <div class="upload-box">
         <span class="upload-icon">☁️</span>
-        <strong style="font-size: 1.1rem;">Välj ljudfil</strong><br>
-        <span style="font-size: 0.85rem; color: #64748b; margin-top: 5px; display: block;">MP3, WAV, M4A</span>
-        <input type="file" id="audioFile" accept="audio/*">
+        <strong style="font-size: 1.1rem;">Välj Ljud eller Video</strong><br>
+        <span style="font-size: 0.85rem; color: #64748b; margin-top: 5px; display: block;">MP3, WAV, M4A, MP4, MOV (Upp till 200 GB)</span>
+        <!-- Ändrad accept för att tillåta film -->
+        <input type="file" id="audioFile" accept="audio/*, video/*">
       </div>
       <div id="fileStatus" class="file-status">✅ <span id="fileName"></span> vald.</div>
     </div>
@@ -265,7 +265,7 @@
     <div id="result"></div>
   </div>
   
-  <!-- CACHE BUSTING v200 -->
-  <script src="popup.js?v=200"></script>
+  <!-- CACHE BUSTING v300 -->
+  <script src="popup.js?v=300"></script>
 </body>
 </html>

@@ -1,7 +1,7 @@
 {
   "name": "Transkriberare Pro",
   "short_name": "Transkriberare",
-  "description": "Mobilanpassad transkriberare med AI.",
+  "description": "Mobilanpassad transkriberare med AI-skanning.",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#f1f5f9",

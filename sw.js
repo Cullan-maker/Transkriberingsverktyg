@@ -1,4 +1,4 @@
-const CACHE_NAME = 'transkrib-pro-v2';
+const CACHE_NAME = 'transkrib-pro-v3';
 const ASSETS = [
   './',
   './index.html',

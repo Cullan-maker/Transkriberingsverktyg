@@ -237,12 +237,11 @@ async function handleAnalysis() {
         reader.readAsDataURL(fileBlob);
       });
     }
-
     // PRIORITERAD LISTA: De mest avancerade/senaste modellerna först
     const modelsToTry = [
+      'gemini-1.5-pro', 
       'gemini-2.5-flash',
       'gemini-2.0-flash', 
-      'gemini-1.5-pro', 
       'gemini-1.5-flash', 
       'gemini-3.6-flash'
     ];

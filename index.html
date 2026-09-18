@@ -187,17 +187,17 @@
     .progress-bar { width: 0%; height: 100%; background-color: var(--primary); transition: width 0.3s ease; }
     .progress-text { text-align: center; margin-top: 8px; font-weight: bold; color: var(--primary); font-size: 0.95rem; }
 
-    /* EXPORT KNAPPAR */
-    .export-section { margin-top: 25px; border-top: 1px solid var(--border); padding-top: 20px; }
+    /* FAST EXPORT MENY I BOTTEN */
+    .export-section { margin-top: 15px; padding: 20px; background: white; border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); display: none; }
     .export-title { font-size: 1.05rem; font-weight: 800; color: var(--text); margin-bottom: 12px; text-align: center;}
     .export-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
     .btn-export { background: #f8fafc; border: 1px solid var(--border); padding: 14px; border-radius: 12px; font-weight: 700; color: var(--primary); display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.95rem; cursor: pointer; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.02); width: 100%; box-sizing: border-box;}
     .btn-export:active { transform: scale(0.96); background: #e2e8f0; }
 
-    /* PDF UTSKRIFT CSS för Dator-Widgeten */
+    /* CSS FÖR UTSKRIFT TILL PDF */
     @media print {
       body { background: white !important; margin: 0 !important; padding: 0 !important; }
-      header, .tabs, .tab-content, #settings, .export-section, .speaker-controls, h2:nth-of-type(2) { display: none !important; }
+      header, .tabs, .tab-content, #settings, #exportContainer, .speaker-controls, h2:nth-of-type(2) { display: none !important; }
       #result { display: block !important; box-shadow: none !important; border: none !important; padding: 0 !important; margin: 0 !important; }
       .transcript-line { border: none !important; margin-bottom: 8px !important; break-inside: avoid; }
       * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -284,7 +284,21 @@
       <div id="errorBox" class="error-box"></div>
     </div>
     
+    <!-- RESULTAT RUTA -->
     <div id="result"></div>
+
+    <!-- FAST EXPORTMENY (Alltid under resultatet) -->
+    <div class="export-section" id="exportContainer">
+      <div class="export-title">⬇️ Spara eller exportera</div>
+      <div class="export-grid">
+        <button class="btn-export" id="exportCopy">📋 Kopiera</button>
+        <button class="btn-export" id="exportEmail">✉️ Mejla</button>
+        <button class="btn-export" id="exportTxt">📄 Text (.txt)</button>
+        <button class="btn-export" id="exportWord">📝 Word (.doc)</button>
+      </div>
+      <button class="btn-export" id="exportPdf" style="width: 100%;">📕 Spara som PDF</button>
+    </div>
+
   </div>
   
   <script src="popup.js"></script>

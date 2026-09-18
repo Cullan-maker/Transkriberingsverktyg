@@ -1,3 +1,4 @@
+
 let mediaRecorder;
 let audioChunks = [];
 let recordingInterval;
@@ -15,26 +16,6 @@ document.addEventListener('DOMContentLoaded', () => {
   setupTabs();
   loadHistory();
   
-  if (window.innerWidth <= 600 || window.location.search.includes('mode=popout')) {
-    const btn = document.getElementById('popoutBtn');
-    if(btn) btn.style.display = 'none';
-  }
-  
-  const popoutBtn = document.getElementById('popoutBtn');
-  if(popoutBtn) {
-    popoutBtn.addEventListener('click', () => {
-      if (typeof chrome !== 'undefined' && chrome.windows) {
-        chrome.windows.create({
-          url: chrome.runtime.getURL("index.html?mode=popout"),
-          type: "popup",
-          width: 500,
-          height: 800
-        });
-        window.close();
-      }
-    });
-  }
-
   document.getElementById('analyzeBtn').addEventListener('click', handleAnalysis);
   document.getElementById('recordBtn').addEventListener('click', toggleRecording);
   
@@ -45,13 +26,6 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('fileStatus').style.display = 'block';
     }
   });
-
-  // Koppla exportfunktionerna så de fungerar för alla laddade analyser
-  document.getElementById('exportCopy').addEventListener('click', exportToClipboard);
-  document.getElementById('exportEmail').addEventListener('click', exportToEmail);
-  document.getElementById('exportTxt').addEventListener('click', () => exportToFile('txt'));
-  document.getElementById('exportWord').addEventListener('click', () => exportToFile('word'));
-  document.getElementById('exportPdf').addEventListener('click', exportToPdf);
 });
 
 function setupTabs() {
@@ -66,8 +40,6 @@ function setupTabs() {
       document.getElementById('errorBox').style.display = 'none';
       document.getElementById('status').innerText = '';
       document.getElementById('progressWrapper').style.display = 'none';
-      document.getElementById('result').style.display = 'none';
-      document.getElementById('exportContainer').style.display = 'none';
     });
   });
 }
@@ -169,18 +141,11 @@ function loadHistory() {
     const infoSpan = document.createElement('span');
     infoSpan.innerHTML = `<span class="history-date">${item.date}</span> (Sparad analys)`;
     infoSpan.style.flexGrow = '1';
-    
     infoSpan.addEventListener('click', () => {
       document.getElementById('result').innerHTML = item.content;
-      
-      const oldExportBlock = document.getElementById('result').querySelector('.export-section');
-      if (oldExportBlock) oldExportBlock.remove();
-      
       document.getElementById('result').style.display = 'block';
-      document.getElementById('exportContainer').style.display = 'block'; 
       setupResultInteractivity();
     });
-    
     const delBtn = document.createElement('button');
     delBtn.className = 'history-delete';
     delBtn.innerText = '❌';
@@ -190,8 +155,6 @@ function loadHistory() {
       hist = hist.filter(i => i.id !== item.id);
       localStorage.setItem('transcriptsHistory', JSON.stringify(hist));
       loadHistory();
-      document.getElementById('result').style.display = 'none';
-      document.getElementById('exportContainer').style.display = 'none';
     });
     div.appendChild(infoSpan);
     div.appendChild(delBtn);
@@ -199,6 +162,7 @@ function loadHistory() {
   });
 }
 
+// BÖRJAR MED DE MEST AVANCERADE MODELLERNA FÖRST
 async function handleAnalysis() {
   const errorBox = document.getElementById('errorBox');
   errorBox.style.display = 'none';
@@ -221,15 +185,28 @@ async function handleAnalysis() {
   const progressBar = document.getElementById('progressBar');
   const progressText = document.getElementById('progressText');
 
+  let fileBlob = null;
+  let textData = null;
+
+  if (activeTab === 'text') {
+    textData = document.getElementById('textInput').value;
+    if (!textData) return showError("Klistra in text först!");
+  } else {
+    fileBlob = activeTab === 'audio' ? document.getElementById('audioFile').files[0] : recordedAudioBlob;
+    if (!fileBlob) return showError("Välj eller spela in en ljudfil först!");
+    if (fileBlob.size > 15 * 1024 * 1024) {
+      showError("Varning: Filen är över 15MB. API:et kan misslyckas.");
+    }
+  }
+
   let prompt = `Analysera följande. Returnera EXAKT och BARA ett JSON-objekt med tre nycklar: 
   "summary" (en ${summaryLength} sammanfattning${focusInput ? ' med fokus på: ' + focusInput : ''}), 
   "speakers" (en array med objekt: {"id": "Talare 1", "role": "Deltagare"}), 
   "transcript" (en array med objekt: {"speaker": "Talare 1", "text": "vad som sades..."}). 
   Viktigt: Din output måste vara giltig JSON. Använd inte markdown runtom, bara rå JSON.\n\n`;
 
-  statusEl.innerText = "⏳ Förbereder...";
+  statusEl.innerText = "⏳ Laddar upp och bearbetar...";
   resultEl.style.display = "none";
-  document.getElementById('exportContainer').style.display = "none";
   
   progressWrapper.style.display = "block";
   let currentProgress = 0;
@@ -242,94 +219,77 @@ async function handleAnalysis() {
     if (step < 0.2) step = 0.2; 
     currentProgress += step;
     if (currentProgress > 95) currentProgress = 95;
+
     progressBar.style.width = currentProgress + '%';
     progressText.innerText = Math.floor(currentProgress) + '%';
   }, 500);
 
   try {
-    let response;
-    const apiUrlText = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${GEMINI_API_KEY}`;
-
-    if (activeTab === 'text') {
-      const text = document.getElementById('textInput').value;
-      if (!text) {
-        clearInterval(progressInterval);
-        progressWrapper.style.display = "none";
-        return showError("Klistra in text först!");
-      }
-      response = await fetch(apiUrlText, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt + text }] }] })
-      });
-    } else {
-      let fileBlob = activeTab === 'audio' ? document.getElementById('audioFile').files[0] : recordedAudioBlob;
-      if (!fileBlob) {
-        clearInterval(progressInterval);
-        progressWrapper.style.display = "none";
-        return showError("Välj eller spela in en ljud/videofil först!");
-      }
-
-      statusEl.innerText = `⏳ Laddar upp filen (Tung process)...`;
-
-      const initRes = await fetch(`https://generativelanguage.googleapis.com/upload/v1beta/files?key=${GEMINI_API_KEY}`, {
-        method: 'POST',
-        headers: {
-          'X-Goog-Upload-Protocol': 'resumable',
-          'X-Goog-Upload-Command': 'start',
-          'X-Goog-Upload-Header-Content-Length': fileBlob.size.toString(),
-          'X-Goog-Upload-Header-Content-Type': fileBlob.type || 'application/octet-stream',
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ file: { display_name: fileBlob.name || 'Inspelning' } })
-      });
-
-      if (!initRes.ok) throw new Error("Kunde inte starta uppladdningen. Kontrollera din API-nyckel.");
-      const uploadUrl = initRes.headers.get('x-goog-upload-url');
-
-      const uploadRes = await fetch(uploadUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Length': fileBlob.size.toString(),
-          'X-Goog-Upload-Offset': '0',
-          'X-Goog-Upload-Command': 'upload, finalize'
-        },
-        body: fileBlob
-      });
-
-      if (!uploadRes.ok) throw new Error("Uppladdningen avbröts eller misslyckades.");
-      const fileInfo = await uploadRes.json();
-      let geminiFile = fileInfo.file;
-
-      let fileState = geminiFile.state;
-      while (fileState === 'PROCESSING') {
-        statusEl.innerText = "⏳ Google bearbetar videon/ljudet... det kan ta någon minut.";
-        await new Promise(r => setTimeout(r, 4000));
-        const checkRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/files/${geminiFile.name}?key=${GEMINI_API_KEY}`);
-        const checkData = await checkRes.json();
-        fileState = checkData.state;
-        if (fileState === 'FAILED') throw new Error("Filen kunde inte läsas av AI:n.");
-      }
-
-      statusEl.innerText = "⏳ Transkriberar och sammanfattar...";
-      response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${GEMINI_API_KEY}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [
-            { text: prompt }, 
-            { fileData: { mimeType: geminiFile.mimeType, fileUri: geminiFile.uri } }
-          ]}]
-        })
+    let data = null;
+    let lastErrorMessage = "";
+    
+    let base64Audio = null;
+    if (fileBlob) {
+      base64Audio = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result.split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(fileBlob);
       });
     }
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error?.message || `HTTP error ${response.status}`);
+    // PRIORITERAD LISTA: De mest avancerade/senaste modellerna först
+    const modelsToTry = [
+      'gemini-2.5-flash',
+      'gemini-2.0-flash', 
+      'gemini-1.5-pro', 
+      'gemini-1.5-flash', 
+      'gemini-3.6-flash'
+    ];
+
+    for (const model of modelsToTry) {
+      try {
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
+        let response;
+
+        if (textData) {
+          response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contents: [{ parts: [{ text: prompt + textData }] }] })
+          });
+        } else {
+          response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [
+                { text: prompt }, 
+                { inlineData: { mimeType: fileBlob.type || 'audio/mp3', data: base64Audio } }
+              ]}]
+            })
+          });
+        }
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error?.message || `HTTP error ${response.status}`);
+        }
+
+        data = await response.json();
+        console.log(`✅ Analys lyckades med avancerad modell: ${model}`);
+        break; 
+
+      } catch (err) {
+        console.warn(`❌ Modell ${model} misslyckades, testar nästa... Felet var:`, err.message);
+        lastErrorMessage = err.message;
+      }
     }
 
-    const data = await response.json();
+    if (!data) {
+      throw new Error("Alla AI-modeller misslyckades. Sista felet: " + lastErrorMessage);
+    }
+
     if (!data.candidates || data.candidates.length === 0) {
       throw new Error("Fick inget svar från AI. Den kanske bedömde ljudet som otillåtet innehåll.");
     }
@@ -361,6 +321,8 @@ async function handleAnalysis() {
     let userMsg = "Fel vid kommunikation med AI.";
     if (error.message.includes('JSON')) {
       userMsg = "AI svarade, men det gick inte att tolka svaret. Prova igen.";
+    } else if (error.message.includes('400') || error.message.toLowerCase().includes('size') || error.message.toLowerCase().includes('payload')) {
+      userMsg = "Ljudfilen är för stor för att skickas direkt via webbläsaren. Prova en kortare fil eller konvertera till lägre ljudkvalitet.";
     } else if (error.message.toLowerCase().includes('demand')) {
       userMsg = "Googles system är tillfälligt överbelastat. Vänta en minut och klicka på Analysera igen.";
     } else {
@@ -405,12 +367,22 @@ function renderResult(data) {
       </div>`;
   });
   html += `</div>`;
+  
+  html += `
+    <div class="export-section" id="exportContainer">
+      <div class="export-title">⬇️ Spara eller exportera</div>
+      <div class="export-grid">
+        <button class="btn-export" id="exportCopy">📋 Kopiera</button>
+        <button class="btn-export" id="exportEmail">✉️ Mejla</button>
+        <button class="btn-export" id="exportTxt">📄 Text (.txt)</button>
+        <button class="btn-export" id="exportWord">📝 Word (.doc)</button>
+      </div>
+      <button class="btn-export" id="exportPdf" style="width: 100%;">📕 Spara som PDF</button>
+    </div>
+  `;
 
   resultEl.innerHTML = html;
-  
   resultEl.style.display = "block";
-  document.getElementById('exportContainer').style.display = "block";
-  
   statusEl.innerText = "✅ Analys klar!";
   
   setupResultInteractivity();
@@ -440,6 +412,21 @@ function setupResultInteractivity() {
       });
     });
   });
+
+  const bindClick = (id, func) => {
+    const btn = document.getElementById(id);
+    if (btn) {
+      const newBtn = btn.cloneNode(true);
+      btn.parentNode.replaceChild(newBtn, btn);
+      newBtn.addEventListener('click', func);
+    }
+  };
+
+  bindClick('exportCopy', exportToClipboard);
+  bindClick('exportEmail', exportToEmail);
+  bindClick('exportTxt', () => exportToFile('txt'));
+  bindClick('exportWord', () => exportToFile('word'));
+  bindClick('exportPdf', exportToPdf);
 }
 
 // --- EXPORT FUNKTIONER ---
@@ -477,12 +464,7 @@ function exportToEmail() {
   const text = getCleanText();
   const subject = encodeURIComponent("Transkription och sammanfattning");
   const body = encodeURIComponent(text);
-  
-  if (typeof chrome !== 'undefined' && chrome.tabs) {
-    window.open(`mailto:?subject=${subject}&body=${body}`, '_blank');
-  } else {
-    window.location.href = `mailto:?subject=${subject}&body=${body}`;
-  }
+  window.location.href = `mailto:?subject=${subject}&body=${body}`;
 }
 
 function exportToFile(type) {
@@ -518,32 +500,25 @@ function exportToFile(type) {
 }
 
 function exportToPdf() {
-  if (typeof chrome !== 'undefined' && chrome.extension) {
-    if (!window.location.search.includes('mode=popout')) {
-      alert("💡 Tips för PDF: Klicka på 'Frigör' uppe i högra hörnet, och spara som PDF i det fönstret istället!");
-    }
-    window.print();
-  } else {
-    const exportContainer = document.getElementById('exportContainer');
-    if(exportContainer) exportContainer.style.display = 'none';
-    
-    const element = document.getElementById('result');
-    const opt = {
-      margin:       15,
-      filename:     'Transkription.pdf',
-      image:        { type: 'jpeg', quality: 0.98 },
-      html2canvas:  { scale: 2, useCORS: true },
-      jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
-    };
+  const exportContainer = document.getElementById('exportContainer');
+  if(exportContainer) exportContainer.style.display = 'none';
+  
+  const element = document.getElementById('result');
+  const opt = {
+    margin:       15,
+    filename:     'Transkription.pdf',
+    image:        { type: 'jpeg', quality: 0.98 },
+    html2canvas:  { scale: 2, useCORS: true },
+    jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+  };
 
-    if (typeof html2pdf === 'undefined') {
-      alert("PDF-motorn laddades inte in. Anslut till internet och försök igen.");
-      if(exportContainer) exportContainer.style.display = 'block';
-      return;
-    }
-
-    html2pdf().set(opt).from(element).save().then(() => {
-      if(exportContainer) exportContainer.style.display = 'block';
-    });
+  if (typeof html2pdf === 'undefined') {
+    alert("PDF-motorn laddas fortfarande in. Vänta 2 sekunder och försök igen!");
+    if(exportContainer) exportContainer.style.display = 'flex';
+    return;
   }
+
+  html2pdf().set(opt).from(element).save().then(() => {
+    if(exportContainer) exportContainer.style.display = 'block';
+  });
 }

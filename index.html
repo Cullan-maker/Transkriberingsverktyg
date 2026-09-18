@@ -2,9 +2,8 @@
 <html lang="sv">
 <head>
   <meta charset="UTF-8">
-  <!-- PWA & Native App Meta Tags -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <meta name="theme-color" content="#ffffff">
+  <meta name="theme-color" content="#f1f5f9">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <title>Transkriberare</title>
@@ -29,9 +28,9 @@
       -webkit-tap-highlight-color: transparent;
       height: 100vh;
       overflow-x: hidden;
+      font-size: 16px; /* Tvingar basstorlek för mobil */
     }
 
-    /* Fast Header i toppen */
     header {
       background: var(--card-bg);
       padding: 16px;
@@ -44,15 +43,15 @@
       z-index: 50;
     }
 
-    /* Innehållsyta med plats för bottenmenyn */
     .content-wrapper {
       padding: 16px;
-      padding-bottom: 100px; /* Gör plats för bottenmenyn */
+      padding-bottom: 100px;
       max-width: 600px;
       margin: 0 auto;
+      width: 100%;
+      box-sizing: border-box;
     }
 
-    /* Menyrad i botten (Native App Style) */
     .tabs {
       position: fixed;
       bottom: 0;
@@ -61,7 +60,7 @@
       background: var(--card-bg);
       display: flex;
       justify-content: space-around;
-      padding: 12px 10px 25px 10px; /* Extra botten-padding för iPhones */
+      padding: 12px 10px 25px 10px;
       box-shadow: 0 -4px 15px rgba(0,0,0,0.05);
       z-index: 100;
       border-top: 1px solid var(--border);
@@ -99,7 +98,6 @@
       box-sizing: border-box;
     }
 
-    /* Stora, tummanpassade knappar */
     .btn-primary {
       background: var(--primary);
       color: white;
@@ -113,7 +111,6 @@
       margin-top: 15px;
       box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);
     }
-    .btn-primary:active { transform: scale(0.98); }
 
     .btn-record {
       background: #ef4444;
@@ -134,7 +131,6 @@
     .btn-record.recording { background: #b91c1c; animation: pulse 1.5s infinite; }
     @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.8; } 100% { opacity: 1; } }
 
-    /* Formulär & Inputs (Font-size 16px förhindrar auto-zoom på iPhone) */
     textarea, input[type="text"], input[type="password"] {
       width: 100%;
       padding: 14px;
@@ -183,10 +179,8 @@
   </style>
 </head>
 <body>
-
   <header>🎙️ Transkriberare</header>
 
-  <!-- Menyrad i botten -->
   <div class="tabs">
     <button class="tab-button active" data-tab="audio">
       <span class="icon">🎵</span>
@@ -207,8 +201,6 @@
   </div>
 
   <div class="content-wrapper">
-
-    <!-- Flik: Ljudfil -->
     <div id="audio" class="tab-content active card">
       <div class="upload-box">
         <span class="upload-icon">☁️</span>
@@ -219,13 +211,11 @@
       <div id="fileStatus" class="file-status">✅ <span id="fileName"></span> vald.</div>
     </div>
 
-    <!-- Flik: Text -->
     <div id="text" class="tab-content card">
       <label style="font-weight: 600; font-size: 1.05rem;">Klistra in ostrukturerad text:</label>
       <textarea id="textInput" placeholder="Klistra in anteckningar här..."></textarea>
     </div>
 
-    <!-- Flik: Spela in -->
     <div id="live" class="tab-content card">
       <p style="font-size: 0.95rem; color: #64748b; margin-top: 0;"><strong>Tips:</strong> Ha ljudet i högtalarna under mötet så hör mikrofonen alla deltagare.</p>
       <button id="recordBtn" class="btn-record">🔴 Starta Inspelning</button>
@@ -233,13 +223,11 @@
       <canvas id="visualizer"></canvas>
     </div>
 
-    <!-- Flik: Historik -->
     <div id="history" class="tab-content card">
       <p style="font-size: 0.95rem; color: #64748b; margin-top: 0; font-weight: bold;">Dina sparade analyser:</p>
       <div id="historyList"></div>
     </div>
 
-    <!-- Inställningar & Analysera (Visas inte under Historik) -->
     <div id="settings" class="card">
       <p style="margin: 0 0 5px 0; font-weight: 800; font-size: 1rem;">🔑 Google API-nyckel</p>
       <input type="password" id="apiKeyInput" placeholder="Klistra in din nyckel här..." style="margin-bottom: 20px;">
@@ -265,11 +253,8 @@
       <div id="status" style="margin-top: 15px; font-weight: bold; text-align: center; color: #4f46e5; font-size: 1.1rem;"></div>
       <div id="errorBox" class="error-box"></div>
     </div>
-
     <div id="result"></div>
-
-  </div> <!-- Slut på content-wrapper -->
-
+  </div>
   <script src="popup.js"></script>
 </body>
 </html>

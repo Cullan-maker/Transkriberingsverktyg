@@ -12,25 +12,28 @@ const colors = ['#ffffff', '#dbeafe', '#dcfce7', '#fef9c3', '#f3e8ff', '#ffe4e6'
 
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('apiKeyInput').value = localStorage.getItem('geminiApiKey') || '';
-
   setupTabs();
   loadHistory();
   
   if (window.location.search.includes('mode=popout')) {
-    document.getElementById('popoutBtn').style.display = 'none';
+    const btn = document.getElementById('popoutBtn');
+    if(btn) btn.style.display = 'none';
   }
   
-  document.getElementById('popoutBtn').addEventListener('click', () => {
-    if (typeof chrome !== 'undefined' && chrome.windows) {
-      chrome.windows.create({
-        url: chrome.runtime.getURL("index.html?mode=popout"),
-        type: "popup",
-        width: 440,
-        height: 750
-      });
-      window.close();
-    }
-  });
+  const popoutBtn = document.getElementById('popoutBtn');
+  if(popoutBtn) {
+    popoutBtn.addEventListener('click', () => {
+      if (typeof chrome !== 'undefined' && chrome.windows) {
+        chrome.windows.create({
+          url: chrome.runtime.getURL("index.html?mode=popout"),
+          type: "popup",
+          width: 440,
+          height: 750
+        });
+        window.close();
+      }
+    });
+  }
 
   document.getElementById('analyzeBtn').addEventListener('click', handleAnalysis);
   document.getElementById('recordBtn').addEventListener('click', toggleRecording);

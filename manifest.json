@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "Transkriberare",
+  "version": "1.3",
+  "description": "Mobilanpassad transkriberare",
+  "action": {
+    "default_popup": "index.html"
+  },
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "https://generativelanguage.googleapis.com/*"
+  ]
+}

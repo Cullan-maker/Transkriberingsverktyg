@@ -1,7 +1,7 @@
 {
   "name": "Transkriberare Pro",
   "short_name": "Transkriberare",
-  "description": "Mobilanpassad transkriberare (Endast 3.6 Flash).",
+  "description": "Mobilanpassad transkriberare med smart UI.",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#f1f5f9",

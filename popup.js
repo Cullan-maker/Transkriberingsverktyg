@@ -9,27 +9,42 @@ let visualizerAnimationId;
 let progressInterval;
 let wakeLock = null;
 
+// Global lagring för rå-transkriptionen så vi kan uppdatera sammanfattningen supersnabbt
+window.currentRawTranscript = "";
+
 const colors = ['#ffffff', '#dbeafe', '#dcfce7', '#fef9c3', '#f3e8ff', '#ffe4e6'];
 
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('apiKeyInput').value = localStorage.getItem('geminiApiKey') || '';
+  document.getElementById('modelSelect').value = localStorage.getItem('geminiModel') || 'auto';
   
   setupTabs();
   loadHistory();
   
+  // Återställ auto-save (visas i resultat-fliken)
   const autoSavedHtml = localStorage.getItem('currentDraftHTML');
   if (autoSavedHtml) {
-    const resEl = document.getElementById('result');
-    resEl.innerHTML = autoSavedHtml;
-    resEl.style.display = 'block';
+    document.getElementById('result').innerHTML = autoSavedHtml;
     setupResultInteractivity();
+    
+    // Försök ladda in rå-transkriptionen om den fanns sparad i HTML:en
+    const hiddenData = document.getElementById('rawTranscriptData');
+    if (hiddenData) {
+      window.currentRawTranscript = decodeURIComponent(hiddenData.innerText);
+    }
+    
+    // Hoppa direkt till resultat om det fanns sparat
+    showTab('result');
   }
 
-  document.getElementById('result').addEventListener('input', () => {
-    localStorage.setItem('currentDraftHTML', document.getElementById('result').innerHTML);
+  document.getElementById('modelSelect').addEventListener('change', (e) => localStorage.setItem('geminiModel', e.target.value));
+  document.getElementById('apiKeyInput').addEventListener('input', (e) => localStorage.setItem('geminiApiKey', e.target.value));
+
+  // Knyt alla Analysera-knappar till funktionen
+  document.querySelectorAll('.analyze-btn').forEach(btn => {
+    btn.addEventListener('click', handleAnalysis);
   });
 
-  document.getElementById('analyzeBtn').addEventListener('click', handleAnalysis);
   document.getElementById('recordBtn').addEventListener('click', toggleRecording);
   
   document.getElementById('audioFile').addEventListener('change', (e) => {
@@ -39,48 +54,62 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('fileStatus').style.display = 'block';
     }
   });
+
+  document.getElementById('closeErrorBtn').addEventListener('click', () => {
+    document.getElementById('loadingOverlay').style.display = 'none';
+    document.getElementById('errorBox').style.display = 'none';
+    document.getElementById('closeErrorBtn').style.display = 'none';
+  });
 });
+
+// FLIK-HANTERING
+function showTab(tabId) {
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  document.getElementById(tabId).classList.add('active');
+  
+  // Uppdatera ikonerna i botten
+  document.querySelectorAll('.tab-button').forEach(btn => {
+    if (btn.getAttribute('data-tab') === tabId) {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+    }
+  });
+}
 
 function setupTabs() {
   document.querySelectorAll('.tab-button').forEach(button => {
     button.addEventListener('click', () => {
-      document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
-      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-      button.classList.add('active');
-      const tabId = button.getAttribute('data-tab');
-      document.getElementById(tabId).classList.add('active');
-      document.getElementById('settings').style.display = tabId === 'history' ? 'none' : 'block';
-      document.getElementById('errorBox').style.display = 'none';
-      document.getElementById('status').innerText = '';
-      document.getElementById('progressWrapper').style.display = 'none';
+      showTab(button.getAttribute('data-tab'));
     });
   });
 }
 
+// WAKELOCK
 async function requestWakeLock() {
-  try {
-    if ('wakeLock' in navigator) {
-      wakeLock = await navigator.wakeLock.request('screen');
-    }
-  } catch (err) { console.warn("Wake Lock misslyckades", err); }
+  try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } 
+  catch (err) { console.warn("Wake Lock misslyckades", err); }
 }
 function releaseWakeLock() {
-  if (wakeLock !== null) { wakeLock.release().then(() => wakeLock = null); }
+  if (wakeLock !== null) wakeLock.release().then(() => wakeLock = null);
 }
 
+// INSPELNING
 async function toggleRecording() {
   const btn = document.getElementById('recordBtn');
   const timerDisplay = document.getElementById('timer');
   const visualizer = document.getElementById('visualizer');
+  const analyzeLiveBtn = document.getElementById('analyzeLiveBtn');
 
   if (mediaRecorder && mediaRecorder.state === 'recording') {
     mediaRecorder.stop();
     clearInterval(recordingInterval);
-    btn.innerHTML = '🔴 Starta Inspelning';
+    btn.innerHTML = '🔴 Starta Ny Inspelning';
     btn.classList.remove('recording');
     if(visualizerAnimationId) cancelAnimationFrame(visualizerAnimationId);
     if(audioContext) audioContext.close();
     visualizer.style.display = 'none';
+    analyzeLiveBtn.style.display = 'block'; // Visa analysera-knappen när vi är klara
     releaseWakeLock();
   } else {
     try {
@@ -92,7 +121,6 @@ async function toggleRecording() {
       mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
       mediaRecorder.onstop = () => {
         recordedAudioBlob = new Blob(audioChunks, { type: 'audio/m4a' });
-        document.getElementById('status').innerText = 'Ljud inspelat! Klicka på Analysera.';
         stream.getTracks().forEach(track => track.stop());
       };
       
@@ -100,9 +128,9 @@ async function toggleRecording() {
       mediaRecorder.start();
       secondsRecorded = 0;
       timerDisplay.innerText = '00:00';
+      analyzeLiveBtn.style.display = 'none';
       btn.innerHTML = '⏹ Stoppa Inspelning';
       btn.classList.add('recording');
-      document.getElementById('status').innerText = 'Spelar in...';
       recordingInterval = setInterval(() => {
         secondsRecorded++;
         const m = String(Math.floor(secondsRecorded / 60)).padStart(2, '0');
@@ -112,7 +140,7 @@ async function toggleRecording() {
       visualizer.style.display = 'block';
       startVisualizer(stream);
     } catch (err) {
-      alert("Kunde inte starta mikrofonen. Har du tillåtit åtkomst i webbläsaren?");
+      alert("Kunde inte starta mikrofonen. Har du tillåtit åtkomst i inställningarna?");
     }
   }
 }
@@ -130,13 +158,13 @@ function startVisualizer(stream) {
   function draw() {
     visualizerAnimationId = requestAnimationFrame(draw);
     analyser.getByteFrequencyData(dataArray);
-    canvasCtx.fillStyle = '#f1f5f9';
+    canvasCtx.fillStyle = '#f8fafc';
     canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
     const barWidth = (canvas.width / bufferLength) * 2.5;
     let barHeight, x = 0;
     for(let i = 0; i < bufferLength; i++) {
       barHeight = dataArray[i] / 2;
-      canvasCtx.fillStyle = '#4f46e5';
+      canvasCtx.fillStyle = '#ef4444';
       canvasCtx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
       x += barWidth + 1;
     }
@@ -144,6 +172,7 @@ function startVisualizer(stream) {
   draw();
 }
 
+// HISTORIK
 function saveToHistory(htmlContent) {
   const dateStr = new Date().toLocaleString('sv-SE', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   const newItem = { id: Date.now(), date: dateStr, content: htmlContent };
@@ -167,9 +196,13 @@ function loadHistory() {
     infoSpan.style.flexGrow = '1';
     infoSpan.addEventListener('click', () => {
       document.getElementById('result').innerHTML = item.content;
-      document.getElementById('result').style.display = 'block';
       localStorage.setItem('currentDraftHTML', item.content);
+      
+      const hiddenData = document.getElementById('rawTranscriptData');
+      if (hiddenData) window.currentRawTranscript = decodeURIComponent(hiddenData.innerText);
+      
       setupResultInteractivity();
+      showTab('result'); // Hoppar till resultat-fliken när du klickar på en gammal fil!
     });
     const delBtn = document.createElement('button');
     delBtn.className = 'history-delete';
@@ -187,6 +220,7 @@ function loadHistory() {
   });
 }
 
+// FILE API
 async function uploadToGeminiFileAPI(fileBlob, apiKey) {
   let mimeType = fileBlob.type;
   if (!mimeType) {
@@ -222,67 +256,75 @@ async function uploadToGeminiFileAPI(fileBlob, apiKey) {
   
   let fileInfo = await uploadRes.json();
   let fileData = fileInfo.file;
-
   const statusEl = document.getElementById('status');
+  
   while (fileData.state === 'PROCESSING') {
-    statusEl.innerText = "⏳ Google bearbetar filen (Detta kan ta någon minut)...";
+    statusEl.innerText = "⏳ Google bearbetar videon (Detta kan ta flera minuter för stora filer)...";
     await new Promise(r => setTimeout(r, 4000));
     const checkRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/files/${fileData.name}?key=${apiKey}`);
     fileData = await checkRes.json();
   }
   
-  if (fileData.state === 'FAILED') throw new Error("Google kunde inte bearbeta denna mediatyp.");
+  if (fileData.state === 'FAILED') throw new Error("Google kunde inte bearbeta denna fil.");
   
   return { mimeType: fileData.mimeType, fileUri: fileData.uri };
 }
 
+// HUVUDANALYS
 async function handleAnalysis() {
-  const errorBox = document.getElementById('errorBox');
-  errorBox.style.display = 'none';
-
   const GEMINI_API_KEY = document.getElementById('apiKeyInput').value.trim();
-  if (!GEMINI_API_KEY) return showError("Du måste klistra in din API-nyckel under inställningar!");
-  localStorage.setItem('geminiApiKey', GEMINI_API_KEY);
+  if (!GEMINI_API_KEY) {
+    showTab('settings');
+    alert("Du måste klistra in din API-nyckel under inställningar först!");
+    return;
+  }
 
-  const activeTab = document.querySelector('.tab-button.active').getAttribute('data-tab');
-  const summaryLength = document.querySelector('input[name="summaryLength"]:checked').value;
-  const focusInput = document.getElementById('focusInput').value;
+  // Se till att loadingoverlay är städad
+  const overlay = document.getElementById('loadingOverlay');
+  const errorBox = document.getElementById('errorBox');
   const statusEl = document.getElementById('status');
-  const resultEl = document.getElementById('result');
-  const progressWrapper = document.getElementById('progressWrapper');
   const progressBar = document.getElementById('progressBar');
   const progressText = document.getElementById('progressText');
+  const closeErrorBtn = document.getElementById('closeErrorBtn');
+  
+  errorBox.style.display = 'none';
+  closeErrorBtn.style.display = 'none';
+  overlay.style.display = 'flex';
 
+  const activeTab = document.querySelector('.tab-content.active').id;
   let fileBlob = null;
   let textData = null;
 
   if (activeTab === 'text') {
     textData = document.getElementById('textInput').value;
-    if (!textData) return showError("Klistra in text först!");
-  } else {
-    fileBlob = activeTab === 'audio' ? document.getElementById('audioFile').files[0] : recordedAudioBlob;
-    if (!fileBlob) return showError("Välj eller spela in en mediafil först!");
-    if (fileBlob.size > 2 * 1024 * 1024 * 1024) {
-      showError("Varning: Filen är över 2 GB. Telefonens RAM-minne kommer krascha.");
-      return;
-    }
+    if (!textData) return triggerError("Klistra in text först!");
+  } else if (activeTab === 'audio') {
+    fileBlob = document.getElementById('audioFile').files[0];
+    if (!fileBlob) return triggerError("Välj en mediafil först!");
+  } else if (activeTab === 'live') {
+    fileBlob = recordedAudioBlob;
+    if (!fileBlob) return triggerError("Spela in ljud först!");
   }
 
+  if (fileBlob && fileBlob.size > 2 * 1024 * 1024 * 1024) {
+    return triggerError("Varning: Filen är över 2 GB. Välj en mindre fil.");
+  }
+
+  // 1. Initial Prompt (Nu gör den alltid en standard-sammanfattning först)
   let prompt = `Analysera följande. Returnera EXAKT och BARA ett JSON-objekt med tre nycklar: 
-  "summary" (en ${summaryLength} sammanfattning${focusInput ? ' med fokus på: ' + focusInput : ''}), 
+  "summary" (en bra, allmän sammanfattning av innehållet), 
   "speakers" (en array med objekt: {"id": "Talare 1", "role": "Deltagare"}), 
   "transcript" (en array med objekt: {"speaker": "Talare 1", "text": "vad som sades..."}). 
   Viktigt: Din output måste vara giltig JSON. Använd inte markdown runtom, bara rå JSON.\n\n`;
 
-  statusEl.innerText = "⏳ Initierar anrop till AI...";
-  progressWrapper.style.display = "block";
+  statusEl.innerText = "⏳ Letar efter godkända AI-modeller...";
   
   let currentProgress = 0;
   progressBar.style.width = '0%';
   progressText.innerText = '0%';
   clearInterval(progressInterval);
   progressInterval = setInterval(() => {
-    let step = (95 - currentProgress) * 0.03;
+    let step = (95 - currentProgress) * 0.02;
     if (step < 0.1) step = 0.1; 
     currentProgress += step;
     if (currentProgress > 95) currentProgress = 95;
@@ -291,47 +333,71 @@ async function handleAnalysis() {
   }, 500);
 
   try {
+    let fetchedModels = [];
+    try {
+      const modelsRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${GEMINI_API_KEY}`);
+      if (modelsRes.ok) {
+        const modelsData = await modelsRes.json();
+        fetchedModels = modelsData.models
+          .filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes("generateContent"))
+          .map(m => m.name.replace('models/', ''));
+      }
+    } catch(err) { console.warn("Kunde inte hämta modell-lista från Google.", err); }
+
+    const selectedModel = document.getElementById('modelSelect').value;
+    let modelsToTry = [];
+    
+    if (selectedModel === 'auto') {
+      if (fetchedModels.length > 0) {
+        const prioList = ['gemini-2.5-flash', 'gemini-2.0-flash-exp', 'gemini-2.0-flash', 'gemini-1.5-pro-latest', 'gemini-1.5-pro', 'gemini-1.5-flash-latest', 'gemini-1.5-flash', 'gemini-3.6-flash'];
+        modelsToTry = prioList.filter(m => fetchedModels.includes(m));
+        if(modelsToTry.length === 0) modelsToTry = [fetchedModels[0]]; 
+      } else {
+        modelsToTry = ['gemini-1.5-pro-latest', 'gemini-1.5-flash-latest', 'gemini-1.5-pro', 'gemini-1.5-flash'];
+      }
+    } else {
+      modelsToTry = [selectedModel]; 
+    }
+
     let uploadedFileRef = null;
     if (fileBlob) {
-      statusEl.innerText = "⏳ Laddar upp filen säkert till Google...";
+      statusEl.innerText = "⏳ Laddar upp filen säkert till Google (2GB-stöd)...";
       uploadedFileRef = await uploadToGeminiFileAPI(fileBlob, GEMINI_API_KEY);
-      statusEl.innerText = "⏳ Analyserar innehållet med Gemini 3.6 Flash...";
+      statusEl.innerText = "⏳ AI lyssnar och transkriberar...";
     }
 
-    // TVINGAR ATT ENBART ANVÄNDA GEMINI-3.6-FLASH
-    const model = 'gemini-3.6-flash';
     let data = null;
+    let lastErrorMessage = "";
 
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
-    let requestBody;
+    for (const model of modelsToTry) {
+      try {
+        console.log(`Testar modell: ${model}`);
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
+        let requestBody = textData 
+          ? { contents: [{ parts: [{ text: prompt + textData }] }] }
+          : { contents: [{ parts: [{ text: prompt }, { fileData: { mimeType: uploadedFileRef.mimeType, fileUri: uploadedFileRef.fileUri } }] }] };
 
-    if (textData) {
-      requestBody = { contents: [{ parts: [{ text: prompt + textData }] }] };
-    } else {
-      requestBody = {
-        contents: [{ parts: [
-          { text: prompt }, 
-          { fileData: { mimeType: uploadedFileRef.mimeType, fileUri: uploadedFileRef.fileUri } }
-        ]}]
-      };
+        let response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody)
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error?.message || `HTTP error ${response.status}`);
+        }
+
+        data = await response.json();
+        break; 
+
+      } catch (err) {
+        lastErrorMessage = err.message;
+      }
     }
 
-    let response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(requestBody)
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error?.message || `HTTP error ${response.status}`);
-    }
-
-    data = await response.json();
-
-    if (!data || !data.candidates || data.candidates.length === 0) {
-      throw new Error("Fick inget svar från AI.");
-    }
+    if (!data) throw new Error(`Google nekade åtkomst med din nyckel. Felet: ${lastErrorMessage}`);
+    if (!data.candidates || data.candidates.length === 0) throw new Error("Fick inget svar från AI.");
 
     let aiText = data.candidates[0].content.parts[0].text;
     const jsonMatch = aiText.match(/\{[\s\S]*\}/);
@@ -344,32 +410,52 @@ async function handleAnalysis() {
     progressBar.style.width = '100%';
     progressText.innerText = '100%';
 
+    // Spara en kopia av rå-transkriptionen för snabb-genereringar
+    window.currentRawTranscript = resultObj.transcript.map(item => `${item.speaker}: ${item.text}`).join('\n');
+
     setTimeout(() => {
-      progressWrapper.style.display = 'none';
+      overlay.style.display = 'none';
       renderResult(resultObj);
+      showTab('result'); // Växlar vyn över till resultatet snyggt och prydligt!
     }, 500);
 
   } catch (error) {
-    clearInterval(progressInterval);
-    progressWrapper.style.display = "none";
-    statusEl.innerText = "";
-    showError(error.message);
+    triggerError(error.message);
   }
 }
 
-function showError(msg) {
+function triggerError(msg) {
+  clearInterval(progressInterval);
   const errorBox = document.getElementById('errorBox');
+  document.getElementById('status').innerText = "Något gick fel.";
   errorBox.innerHTML = `<strong>Fel:</strong> ${msg}`;
   errorBox.style.display = 'block';
-  document.getElementById('status').innerText = "";
+  document.getElementById('closeErrorBtn').style.display = 'block';
 }
 
 function renderResult(data) {
   const resultEl = document.getElementById('result');
-  const statusEl = document.getElementById('status');
 
-  let html = `<h2>📋 Sammanfattning</h2><p id="summaryText">${data.summary}</p>`;
-  html += `<h2>👥 Hantera Talare</h2><div class="speaker-controls" id="speakerControls">`;
+  // SKRÄDDARSY SAMMANFATTNING (Dynamisk snabbmeny högst upp)
+  let html = `
+    <div style="background:#f8fafc; padding:20px; border-radius:12px; margin-bottom:20px; border:1px solid #cbd5e1; box-shadow: 0 4px 6px rgba(0,0,0,0.02);">
+      <h3 style="margin-top:0; font-size:1.1rem; color:var(--primary); display:flex; align-items:center; gap:8px;">⚙️ Ändra Sammanfattning</h3>
+      <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 15px;">Inte nöjd? Generera en ny på 2 sekunder utan att ladda upp filen igen!</p>
+      
+      <div style="display: flex; gap: 15px; margin-bottom: 15px; font-size: 0.95rem; font-weight:bold;">
+        <label style="display:flex; align-items:center; gap:5px;"><input type="radio" name="resumLength" value="kort"> Kort</label>
+        <label style="display:flex; align-items:center; gap:5px;"><input type="radio" name="resumLength" value="mellan" checked> Mellan</label>
+        <label style="display:flex; align-items:center; gap:5px;"><input type="radio" name="resumLength" value="lång"> Lång</label>
+      </div>
+      
+      <input type="text" id="resumFocus" placeholder="Fokus (t.ex. 'endast budget')" style="margin-bottom:15px;">
+      <button id="resumBtn" class="btn-primary" style="margin-top:0; padding:12px; box-shadow:none;">🔄 Uppdatera sammanfattning</button>
+    </div>
+  `;
+
+  html += `<h2>📋 Sammanfattning</h2><p id="summaryText" style="line-height:1.6; font-size:1.05rem;">${data.summary}</p>`;
+  
+  html += `<h2 style="margin-top:30px;">👥 Hantera Talare</h2><div class="speaker-controls" id="speakerControls">`;
   data.speakers.forEach((speaker) => {
     html += `
       <div style="margin-bottom: 10px;">
@@ -404,19 +490,70 @@ function renderResult(data) {
       </div>
       <button class="btn-export" id="exportPdf" style="width: 100%;">📕 Spara som PDF</button>
     </div>
+    <div id="rawTranscriptData" style="display:none;">${encodeURIComponent(window.currentRawTranscript)}</div>
   `;
 
   resultEl.innerHTML = html;
-  resultEl.style.display = "block";
-  statusEl.innerText = "✅ Analys klar!";
   
+  // Spara HTML i localstorage så vi inte tappar bort det om sidan stängs
   localStorage.setItem('currentDraftHTML', html);
   
   setupResultInteractivity();
   saveToHistory(html);
 }
 
+// 2. MAGISK FUNKTION: UPDATERA SAMMANFATTNING UTAN ATT LADDA UPP IGEN!
+async function handleResummarize() {
+  const btn = document.getElementById('resumBtn');
+  btn.innerText = "⏳ Skapar...";
+  btn.disabled = true;
+  
+  try {
+    const apiKey = localStorage.getItem('geminiApiKey');
+    const length = document.querySelector('input[name="resumLength"]:checked').value;
+    const focus = document.getElementById('resumFocus').value.trim();
+    const rawData = window.currentRawTranscript;
+    
+    if(!rawData) throw new Error("Kunde inte hitta transkriptionen i minnet.");
+    
+    let prompt = `Du är en expert på att sammanfatta text. Skriv en ${length} sammanfattning av följande konversation. ${focus ? 'Du MÅSTE fokusera särskilt på: ' + focus + '.' : ''} Returnera BARA sammanfattningstexten rakt upp och ner, använd ingen inledning, avslutning eller kodblockering.\n\nKONVERSATION:\n${rawData}`;
+    
+    // Vi använder alltid flash för text-sammanfattning eftersom den är snabbast och vi redan har texten
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`;
+    const res = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+    });
+    
+    if(!res.ok) throw new Error("API fel under uppdatering.");
+    const data = await res.json();
+    const newSummary = data.candidates[0].content.parts[0].text.trim();
+    
+    // Byt ut texten på skärmen
+    document.getElementById('summaryText').innerText = newSummary;
+    
+    // Spara det nya resultatet permanent
+    localStorage.setItem('currentDraftHTML', document.getElementById('result').innerHTML);
+    
+  } catch(e) {
+    alert("Fel vid uppdatering: " + e.message);
+  } finally {
+    btn.innerText = "🔄 Uppdatera sammanfattning";
+    btn.disabled = false;
+  }
+}
+
 function setupResultInteractivity() {
+  
+  const resumBtn = document.getElementById('resumBtn');
+  if (resumBtn) {
+    // Klonar för att undvika dubbla klick-lyssnare om metoden körs flera gånger
+    const newResumBtn = resumBtn.cloneNode(true);
+    resumBtn.parentNode.replaceChild(newResumBtn, resumBtn);
+    newResumBtn.addEventListener('click', handleResummarize);
+  }
+
   document.querySelectorAll('.speaker-name-input, .speaker-role-input').forEach(input => {
     input.addEventListener('input', () => {
       const original = input.getAttribute('data-original');
@@ -528,7 +665,9 @@ function exportToFile(type) {
 
 function exportToPdf() {
   const exportContainer = document.getElementById('exportContainer');
+  const resumControls = document.querySelector('.summary-controls') || document.querySelector('h3').parentNode; 
   if(exportContainer) exportContainer.style.display = 'none';
+  if(resumControls && resumControls.tagName === 'DIV') resumControls.style.display = 'none'; // Göm ändra-rutan på PDF
   
   const element = document.getElementById('result');
   const opt = {
@@ -541,11 +680,13 @@ function exportToPdf() {
 
   if (typeof html2pdf === 'undefined') {
     alert("PDF-motorn laddas fortfarande in. Vänta 2 sekunder och försök igen!");
-    if(exportContainer) exportContainer.style.display = 'flex';
+    if(exportContainer) exportContainer.style.display = 'grid';
+    if(resumControls) resumControls.style.display = 'block';
     return;
   }
 
   html2pdf().set(opt).from(element).save().then(() => {
     if(exportContainer) exportContainer.style.display = 'block';
+    if(resumControls) resumControls.style.display = 'block';
   });
 }

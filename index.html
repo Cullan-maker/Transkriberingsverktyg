@@ -16,36 +16,48 @@
     html, body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 0; background: var(--bg); color: var(--text); box-sizing: border-box; -webkit-tap-highlight-color: transparent; height: 100vh; overflow-x: hidden; font-size: 16px; }
     header { background: var(--card-bg); padding: 16px; text-align: center; font-size: 1.3rem; font-weight: 800; box-shadow: 0 1px 3px rgba(0,0,0,0.05); position: sticky; top: 0; z-index: 50; }
     .content-wrapper { padding: 16px; padding-bottom: 100px; max-width: 600px; margin: 0 auto; width: 100%; box-sizing: border-box; }
-    .tabs { position: fixed; bottom: 0; left: 0; right: 0; background: var(--card-bg); display: flex; justify-content: space-around; padding: 12px 10px 25px 10px; box-shadow: 0 -4px 15px rgba(0,0,0,0.05); z-index: 100; border-top: 1px solid var(--border); }
-    .tab-button { background: none; border: none; display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 0.75rem; font-weight: 600; color: var(--text-muted); flex: 1; cursor: pointer; transition: color 0.2s; }
-    .tab-button .icon { font-size: 1.5rem; }
+    
+    /* BOTTENMENY */
+    .tabs { position: fixed; bottom: 0; left: 0; right: 0; background: var(--card-bg); display: flex; justify-content: space-around; padding: 12px 5px 25px 5px; box-shadow: 0 -4px 15px rgba(0,0,0,0.05); z-index: 100; border-top: 1px solid var(--border); }
+    .tab-button { background: none; border: none; display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 0.7rem; font-weight: 600; color: var(--text-muted); flex: 1; cursor: pointer; transition: color 0.2s; padding: 0; }
+    .tab-button .icon { font-size: 1.4rem; }
     .tab-button.active { color: var(--primary); }
-    .tab-button.active .icon { transform: scale(1.1); transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+    .tab-button.active .icon { transform: scale(1.15); transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+    
     .tab-content { display: none; animation: fadeIn 0.3s ease; }
     .tab-content.active { display: block; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
-    .card { background: var(--card-bg); padding: 20px; border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); margin-bottom: 16px; width: 100%; box-sizing: border-box; }
+    
+    .card { background: var(--card-bg); padding: 20px; border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); margin-bottom: 16px; width: 100%; box-sizing: border-box; border: 1px solid var(--border); }
+    
     .btn-primary { background: var(--primary); color: white; border: none; padding: 16px; width: 100%; border-radius: 12px; font-weight: bold; font-size: 1.1rem; cursor: pointer; margin-top: 15px; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25); }
-    .btn-record { background: #ef4444; color: white; border: none; padding: 18px; width: 100%; border-radius: 12px; font-weight: bold; font-size: 1.15rem; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 10px; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.25); }
+    .btn-record { background: #ef4444; color: white; border: none; padding: 18px; width: 100%; border-radius: 12px; font-weight: bold; font-size: 1.15rem; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 10px; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.25); margin-bottom: 15px; }
     .btn-record.recording { background: #b91c1c; animation: pulse 1.5s infinite; }
     @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.8; } 100% { opacity: 1; } }
+    
     textarea, input[type="text"], input[type="password"], select { width: 100%; padding: 14px; border: 1px solid var(--border); border-radius: 10px; box-sizing: border-box; margin-top: 8px; font-family: inherit; font-size: 16px; background: #f8fafc; color: var(--text); }
-    textarea { resize: vertical; min-height: 120px; }
-    .upload-box { border: 2px dashed var(--border); border-radius: 12px; padding: 30px 15px; text-align: center; cursor: pointer; background: #f8fafc; position: relative; }
+    textarea { resize: vertical; min-height: 140px; }
+    
+    .upload-box { border: 2px dashed var(--border); border-radius: 12px; padding: 40px 15px; text-align: center; cursor: pointer; background: #f8fafc; position: relative; }
     .upload-box input[type="file"] { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
-    .upload-icon { font-size: 3rem; margin-bottom: 10px; display: block; }
-    .file-status { margin-top: 15px; font-size: 0.95rem; color: #16a34a; font-weight: bold; display: none; word-break: break-all; text-align: center; }
-    #result { margin-top: 15px; padding: 20px; background: white; border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); display: none; width: 100%; box-sizing: border-box; overflow-wrap: break-word; }
+    .upload-icon { font-size: 3.5rem; margin-bottom: 10px; display: block; }
+    .file-status { margin-top: 15px; font-size: 0.95rem; color: #16a34a; font-weight: bold; display: none; word-break: break-all; text-align: center; background: #dcfce7; padding: 10px; border-radius: 8px; }
+    
     .history-item { padding: 14px 10px; border-bottom: 1px solid var(--border); cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
     .history-date { font-weight: bold; color: var(--primary); font-size: 0.95rem; }
     .history-delete { background: #fee2e2; color: #ef4444; border: none; border-radius: 8px; padding: 8px 12px; cursor: pointer; font-size: 1.1rem; }
-    #visualizer { width: 100%; height: 80px; background: #f1f5f9; border-radius: 10px; margin-top: 15px; display: none; }
+    
+    #visualizer { width: 100%; height: 80px; background: #f1f5f9; border-radius: 10px; display: none; }
     .speaker-color-btn { width: 34px; height: 34px; border-radius: 50%; border: 2px solid var(--border); cursor: pointer; display: inline-block; margin-right: 8px; }
     .speaker-controls { background: #f8fafc; padding: 15px; border-radius: 12px; margin-bottom: 15px; border: 1px solid var(--border); }
-    .error-box { background: #fee2e2; color: #b91c1c; padding: 15px; border-radius: 10px; margin-top: 15px; font-size: 0.95rem; display: none; border: 1px solid #f87171; font-weight: bold; }
-    .progress-container { width: 100%; background-color: var(--border); border-radius: 10px; overflow: hidden; height: 16px; margin-top: 15px; }
+    
+    /* LOADING OVERLAY */
+    #loadingOverlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(248, 250, 252, 0.95); z-index: 9999; flex-direction: column; justify-content: center; align-items: center; padding: 20px; backdrop-filter: blur(4px); }
+    .progress-container { width: 100%; max-width: 300px; background-color: #cbd5e1; border-radius: 10px; overflow: hidden; height: 12px; margin-top: 15px; }
     .progress-bar { width: 0%; height: 100%; background-color: var(--primary); transition: width 0.3s ease; }
-    .progress-text { text-align: center; margin-top: 8px; font-weight: bold; color: var(--primary); font-size: 0.95rem; }
+    .progress-text { text-align: center; margin-top: 8px; font-weight: bold; color: var(--primary); font-size: 1rem; }
+    .error-box { background: #fee2e2; color: #b91c1c; padding: 15px; border-radius: 10px; margin-top: 20px; font-size: 0.95rem; display: none; border: 1px solid #f87171; font-weight: bold; width: 100%; max-width: 400px; text-align: center; }
+    
     .export-section { margin-top: 25px; border-top: 1px solid var(--border); padding-top: 20px; }
     .export-title { font-size: 1.05rem; font-weight: 800; color: var(--text); margin-bottom: 12px; text-align: center;}
     .export-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
@@ -57,81 +69,84 @@
   <header>🎙️ Transkriberare</header>
 
   <div class="tabs">
-    <button class="tab-button active" data-tab="audio">
-      <span class="icon">📁</span><span>Media</span>
-    </button>
-    <button class="tab-button" data-tab="text">
-      <span class="icon">📝</span><span>Text</span>
-    </button>
-    <button class="tab-button" data-tab="live">
-      <span class="icon">🔴</span><span>Spela in</span>
-    </button>
-    <button class="tab-button" data-tab="history">
-      <span class="icon">📚</span><span>Historik</span>
-    </button>
+    <button class="tab-button active" data-tab="audio"><span class="icon">📁</span><span>Media</span></button>
+    <button class="tab-button" data-tab="text"><span class="icon">📝</span><span>Text</span></button>
+    <button class="tab-button" data-tab="live"><span class="icon">🔴</span><span>Spela in</span></button>
+    <button class="tab-button" data-tab="history"><span class="icon">📚</span><span>Historik</span></button>
+    <button class="tab-button" data-tab="settings"><span class="icon">⚙️</span><span>Inställning</span></button>
   </div>
 
   <div class="content-wrapper">
-    <div id="result" style="margin-bottom: 20px;"></div>
-
+    
+    <!-- FLIK: MEDIA -->
     <div id="audio" class="tab-content active card">
       <div class="upload-box">
         <span class="upload-icon">☁️</span>
         <strong style="font-size: 1.1rem;">Välj Ljud eller Video</strong><br>
-        <span style="font-size: 0.85rem; color: #64748b; margin-top: 5px; display: block;">MP3, WAV, MP4, MOV (Upp till 2 GB)</span>
+        <span style="font-size: 0.85rem; color: #64748b; margin-top: 5px; display: block;">MP3, WAV, MP4, MOV (Max 2 GB)</span>
         <input type="file" id="audioFile" accept="audio/*, video/*">
       </div>
       <div id="fileStatus" class="file-status">✅ <span id="fileName"></span> vald.</div>
+      <button class="btn-primary analyze-btn">✨ Analysera Fil</button>
     </div>
 
+    <!-- FLIK: TEXT -->
     <div id="text" class="tab-content card">
       <label style="font-weight: 600; font-size: 1.05rem;">Klistra in ostrukturerad text:</label>
-      <textarea id="textInput" placeholder="Klistra in anteckningar här..."></textarea>
+      <textarea id="textInput" placeholder="Klistra in rå text eller anteckningar här..."></textarea>
+      <button class="btn-primary analyze-btn">✨ Analysera Text</button>
     </div>
 
+    <!-- FLIK: LIVE -->
     <div id="live" class="tab-content card">
-      <p style="font-size: 0.95rem; color: #64748b; margin-top: 0;">Skärmen hålls vaken automatiskt. Brusreducering är påslagen för tydligare röst.</p>
+      <p style="font-size: 0.95rem; color: #64748b; margin-top: 0; margin-bottom: 20px;">Skärmen hålls vaken automatiskt. Brusreducering är påslagen för tydligare röst under möten.</p>
       <button id="recordBtn" class="btn-record">🔴 Starta Inspelning</button>
-      <div id="timer" style="text-align: center; font-weight: bold; margin-top: 15px; font-size: 1.5rem; color: #0f172a;">00:00</div>
+      <div id="timer" style="text-align: center; font-weight: bold; margin-bottom: 15px; font-size: 2rem; color: #0f172a;">00:00</div>
       <canvas id="visualizer"></canvas>
+      <button class="btn-primary analyze-btn" id="analyzeLiveBtn" style="display:none;">✨ Analysera Inspelning</button>
     </div>
 
+    <!-- FLIK: HISTORIK -->
     <div id="history" class="tab-content card">
       <p style="font-size: 0.95rem; color: #64748b; margin-top: 0; font-weight: bold;">Dina sparade analyser:</p>
       <div id="historyList"></div>
     </div>
 
-    <div id="settings" class="card">
-      <label style="font-weight: 800; font-size: 1rem; display: block; margin-bottom: 5px;">🤖 AI-Modell</label>
-      <select id="modelSelect" style="margin-bottom: 20px;">
-        <option value="gemini-3.6-flash">Gemini 3.6 Flash (Tvingad via API-nyckel)</option>
-      </select>
-
-      <p style="margin: 0 0 5px 0; font-weight: 800; font-size: 1rem;">🔑 Google API-nyckel</p>
+    <!-- FLIK: INSTÄLLNINGAR -->
+    <div id="settings" class="tab-content card">
+      <h2 style="margin-top: 0;">⚙️ Kontoinställningar</h2>
+      <label style="font-weight: 800; font-size: 1rem; display: block; margin-bottom: 5px;">🔑 Google API-nyckel</label>
       <input type="password" id="apiKeyInput" placeholder="Klistra in din nyckel här..." style="margin-bottom: 20px;">
+
+      <label style="font-weight: 800; font-size: 1rem; display: block; margin-bottom: 5px;">🤖 Välj AI-Modell</label>
+      <select id="modelSelect" style="margin-bottom: 20px;">
+        <option value="auto">Auto (Skannar din nyckel efter modeller)</option>
+        <option value="gemini-1.5-pro-latest">Gemini 1.5 Pro (Avancerad)</option>
+        <option value="gemini-1.5-flash-latest">Gemini 1.5 Flash (Snabb)</option>
+        <option value="gemini-2.0-flash-exp">Gemini 2.0 Flash (Ny)</option>
+        <option value="gemini-3.6-flash">Gemini 3.6 Flash</option>
+      </select>
       
-      <p style="margin: 0 0 10px 0; font-weight: 800; font-size: 1rem;">⚙️ Längd på sammanfattning</p>
-      <div style="display: flex; gap: 10px; margin-bottom: 20px; font-size: 1rem; justify-content: space-between;">
-        <label style="display:flex; align-items:center; gap:5px;"><input type="radio" name="summaryLength" value="kort"> Kort</label>
-        <label style="display:flex; align-items:center; gap:5px;"><input type="radio" name="summaryLength" value="mellan" checked> Mellan</label>
-        <label style="display:flex; align-items:center; gap:5px;"><input type="radio" name="summaryLength" value="lång"> Lång</label>
-      </div>
-      
-      <label for="focusInput" style="font-weight: 800; font-size: 1rem; display: block; margin-bottom: 5px;">Fokus (frivilligt)</label>
-      <input type="text" id="focusInput" placeholder="T.ex. 'Fokus på beslut'">
-      
-      <button id="analyzeBtn" class="btn-primary">✨ Analysera Innehåll</button>
-      
-      <div id="progressWrapper" style="display: none;">
-        <div class="progress-container"><div id="progressBar" class="progress-bar"></div></div>
-        <div id="progressText" class="progress-text">0%</div>
-      </div>
-      <div id="status" style="margin-top: 15px; font-weight: bold; text-align: center; color: #4f46e5; font-size: 1.1rem;"></div>
-      <div id="errorBox" class="error-box"></div>
+      <p style="font-size: 0.85rem; color: #64748b;">Inställningar för sammanfattningens längd och fokus görs numera direkt i Resultat-vyn efter att transkriberingen är klar!</p>
+    </div>
+
+    <!-- FLIK: RESULTAT (Visas endast när en analys är klar eller vald från historik) -->
+    <div id="result" class="tab-content card" style="padding: 15px;">
+      <!-- Genererat innehåll hamnar här -->
     </div>
   </div>
+
+  <!-- LOADING OVERLAY (Heltäckande så användaren slipper scrolla eller klicka fel) -->
+  <div id="loadingOverlay">
+    <div style="font-size: 4rem; animation: pulse 1.5s infinite;">⏳</div>
+    <h2 id="status" style="color:var(--text); text-align:center; margin-top:15px; font-size: 1.2rem;">Startar AI...</h2>
+    <div class="progress-container"><div id="progressBar" class="progress-bar"></div></div>
+    <div id="progressText" class="progress-text">0%</div>
+    <div id="errorBox" class="error-box"></div>
+    <button id="closeErrorBtn" class="btn-primary" style="display:none; max-width: 250px;">Stäng & Försök Igen</button>
+  </div>
   
-  <script src="popup.js?v=700"></script>
+  <script src="popup.js?v=900"></script>
   <script>
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('sw.js').then(() => console.log("PWA Redo"));
